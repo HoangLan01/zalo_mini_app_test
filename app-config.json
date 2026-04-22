@@ -1,0 +1,31 @@
+{
+  "app": {
+    "title": "Phường Tùng Thiện",
+    "statusBarColor": "#0068FF",
+    "actionBarColor": "#0068FF",
+    "textColor": "#FFFFFF",
+    "hideActionBar": false
+  },
+  "pages": [
+    "pages/index/index",
+    "pages/news/index",
+    "pages/news/detail",
+    "pages/services/index",
+    "pages/feedback/index",
+    "pages/feedback/create",
+    "pages/feedback/detail",
+    "pages/booking/index",
+    "pages/booking/create",
+    "pages/booking/history",
+    "pages/rating/index",
+    "pages/events/index",
+    "pages/events/detail",
+    "pages/heritage/index",
+    "pages/heritage/detail",
+    "pages/ihanoi/index",
+    "pages/dvc/index",
+    "pages/vneid/index",
+    "pages/coming-soon/index",
+    "pages/profile/index"
+  ]
+}
