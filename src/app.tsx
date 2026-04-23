@@ -14,6 +14,8 @@ import FeedbackCreatePage from '@/pages/feedback/create';
 import FeedbackDetailPage from '@/pages/feedback/detail';
 import BookingIndexPage from '@/pages/booking/index';
 import BookingCreatePage from '@/pages/booking/create';
+import HeritageIndexPage from '@/pages/heritage/index';
+import HeritageDetailPage from '@/pages/heritage/detail';
 
 // Imports for other pages will be added later when implemented
 import { useUserStore } from '@/store/userStore';
@@ -38,6 +40,8 @@ const MyApp: React.FC = () => {
             <Route path="/feedback-detail" element={<FeedbackDetailPage />} />
             <Route path="/booking" element={<BookingIndexPage />} />
             <Route path="/booking-create" element={<BookingCreatePage />} />
+            <Route path="/heritage" element={<HeritageIndexPage />} />
+            <Route path="/heritage-detail" element={<HeritageDetailPage />} />
             <Route path="/services" element={<ComingSoon title="Dịch vụ" />} />
             <Route path="/profile" element={<ComingSoon title="Cá nhân" />} />
             <Route path="/dvc" element={<DvcPage />} />
