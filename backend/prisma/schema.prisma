@@ -1,0 +1,153 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =============================================
+// MODEL: User – người dân đã đăng nhập qua Zalo
+// =============================================
+model User {
+  id          String   @id @default(cuid())
+  zaloId      String   @unique           // userId từ Zalo platform
+  displayName String                     // Tên Zalo của người dùng
+  phoneToken  String?                    // Token dùng để lấy số ĐT (không lưu số ĐT trực tiếp)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  feedbacks   Feedback[]
+  bookings    Booking[]
+  ratings     Rating[]
+
+  @@index([zaloId])
+}
+
+// =============================================
+// MODEL: Feedback – Phản ánh hiện trường
+// =============================================
+model Feedback {
+  id          String         @id @default(cuid())
+  code        String         @unique           // VD: "PA-2026-0042"
+  userId      String
+  user        User           @relation(fields: [userId], references: [id])
+
+  title       String
+  category    FeedbackCategory
+  description String         @db.Text
+  imageUrls   String[]       // Mảng URL ảnh từ Cloudinary
+  latitude    Float?
+  longitude   Float?
+  address     String?
+
+  status      FeedbackStatus @default(PENDING)
+  response    String?        @db.Text         // Phản hồi từ cán bộ
+  respondedAt DateTime?
+
+  // Thông tin tin nhắn OA đã gửi (dùng để mapping khi nhận Webhook reply)
+  oaMessageId String?        // Message ID Zalo OA gán cho tin nhắn đã gửi vào OA Manager
+
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+enum FeedbackStatus {
+  PENDING       // Đang tiếp nhận
+  PROCESSING    // Đang xử lý
+  TRANSFERRED   // Đã chuyển đơn vị
+  RESOLVED      // Đã giải quyết
+}
+
+enum FeedbackCategory {
+  HA_TANG       // Hạ tầng – Đường sá
+  VE_SINH       // Vệ sinh môi trường
+  TRAT_TU       // Trật tự đô thị
+  AN_NINH       // An ninh – Trật tự
+  KHAC          // Vấn đề khác
+}
+
+// =============================================
+// MODEL: Booking – Đặt lịch tiếp dân
+// =============================================
+model Booking {
+  id            String        @id @default(cuid())
+  code          String        @unique           // VD: "LH-2026-0015"
+  userId        String
+  user          User          @relation(fields: [userId], references: [id])
+
+  field         BookingField
+  preferredDate DateTime                        // Ngày mong muốn (UTC)
+  preferredTime String                          // "08:00" (chuỗi HH:mm)
+  confirmedDate DateTime?                       // Ngày đã xác nhận chính xác
+  confirmedTime String?                         // Giờ đã xác nhận chính xác
+  description   String        @db.Text
+  contactName   String                          // Họ tên người đến
+
+  status        BookingStatus @default(PENDING)
+  rejectionReason   String?   @db.Text
+  rescheduledNote   String?   @db.Text
+
+  // Tracking nhắc lịch
+  reminder24hSent   Boolean   @default(false)
+  reminder1hSent    Boolean   @default(false)
+
+  // Mapping Webhook
+  oaMessageId   String?       // Message ID tin nhắn đã gửi vào OA Manager
+
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([confirmedDate])
+}
+
+enum BookingStatus {
+  PENDING       // Chờ xác nhận
+  CONFIRMED     // Đã xác nhận
+  REJECTED      // Từ chối
+  RESCHEDULED   // Đã dời lịch
+  COMPLETED     // Đã hoàn thành
+  CANCELLED     // Người dân hủy
+}
+
+enum BookingField {
+  HO_TICH       // Hộ tịch
+  CU_TRU        // Cư trú
+  CHUNG_THUC    // Chứng thực
+  DAT_DAI       // Đất đai – Xây dựng
+  XA_HOI        // Chính sách xã hội
+  KHAC          // Vấn đề khác
+}
+
+// =============================================
+// MODEL: Rating – Đánh giá dịch vụ công
+// =============================================
+model Rating {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+
+  procedure       String                // Lĩnh vực thủ tục đã sử dụng
+  attitudeScore   Int                   // 1–5: thái độ phục vụ
+  timelinessScore Int                   // 1–5: thời gian giải quyết
+  outcomeScore    Int                   // 1–5: kết quả
+  averageScore    Float                 // Tính tự động: (attitude+timeliness+outcome)/3
+  comment         String?  @db.Text
+
+  // Flag: đã gửi cảnh báo vào OA Manager chưa (cho rating thấp)
+  alertSent       Boolean  @default(false)
+
+  createdAt       DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+}

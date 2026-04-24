@@ -1,0 +1,713 @@
+-- =============================================================================
+-- DATABASE: tungtthien_db
+-- Dự án: Zalo Mini App – UBND Phường Tùng Thiện, Thành phố Hà Nội
+-- PostgreSQL 16 | Chạy trên pgAdmin 4
+-- Tác giả: Bộ phận KHCN&CĐS – Phòng Văn hoá Xã hội
+-- Phiên bản: 1.0 | Ngày lập: Tháng 4 năm 2026
+-- =============================================================================
+-- HƯỚNG DẪN CHẠY TRONG PGADMIN 4:
+--   1. Tạo database mới tên "tungtthien_db" (UTF8, locale vi_VN hoặc C)
+--   2. Mở Query Tool trong database đó
+--   3. Paste toàn bộ script này rồi nhấn F5 (Execute)
+--   4. Kiểm tra tab Messages: nếu không có lỗi → thành công
+-- =============================================================================
+
+
+-- =============================================================================
+-- BƯỚC 0: ĐẶT SEARCH PATH VÀ CẤU HÌNH SESSION
+-- =============================================================================
+
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+SET row_security = off;
+
+
+-- =============================================================================
+-- BƯỚC 1: TẠO EXTENSION CẦN THIẾT
+-- =============================================================================
+
+-- pgcrypto: dùng để tạo CUID-like ID (gen_random_uuid)
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+
+-- =============================================================================
+-- BƯỚC 2: TẠO CÁC KIỂU ENUM
+-- =============================================================================
+
+-- 2.1 Trạng thái phản ánh hiện trường
+CREATE TYPE "FeedbackStatus" AS ENUM (
+    'PENDING',       -- Đang tiếp nhận
+    'PROCESSING',    -- Đang xử lý
+    'TRANSFERRED',   -- Đã chuyển đơn vị
+    'RESOLVED'       -- Đã giải quyết
+);
+COMMENT ON TYPE "FeedbackStatus" IS 'Trạng thái xử lý phản ánh hiện trường';
+
+-- 2.2 Danh mục phản ánh
+CREATE TYPE "FeedbackCategory" AS ENUM (
+    'HA_TANG',    -- Hạ tầng – Đường sá
+    'VE_SINH',    -- Vệ sinh môi trường
+    'TRAT_TU',    -- Trật tự đô thị
+    'AN_NINH',    -- An ninh – Trật tự
+    'KHAC'        -- Vấn đề khác
+);
+COMMENT ON TYPE "FeedbackCategory" IS 'Danh mục phân loại phản ánh hiện trường';
+
+-- 2.3 Trạng thái lịch hẹn
+CREATE TYPE "BookingStatus" AS ENUM (
+    'PENDING',      -- Chờ xác nhận
+    'CONFIRMED',    -- Đã xác nhận
+    'REJECTED',     -- Từ chối
+    'RESCHEDULED',  -- Đã dời lịch
+    'COMPLETED',    -- Đã hoàn thành
+    'CANCELLED'     -- Người dân hủy
+);
+COMMENT ON TYPE "BookingStatus" IS 'Trạng thái lịch hẹn tiếp dân';
+
+-- 2.4 Lĩnh vực đặt lịch
+CREATE TYPE "BookingField" AS ENUM (
+    'HO_TICH',    -- Hộ tịch (khai sinh, khai tử, kết hôn...)
+    'CU_TRU',     -- Cư trú (đăng ký tạm trú, thường trú...)
+    'CHUNG_THUC', -- Chứng thực giấy tờ
+    'DAT_DAI',    -- Đất đai – Xây dựng
+    'XA_HOI',     -- Chính sách xã hội
+    'KHAC'        -- Vấn đề khác
+);
+COMMENT ON TYPE "BookingField" IS 'Lĩnh vực cần tư vấn khi đặt lịch tiếp dân';
+
+
+-- =============================================================================
+-- BƯỚC 3: TẠO CÁC BẢNG CHÍNH
+-- =============================================================================
+
+-- -----------------------------------------------------------------------------
+-- BẢNG 1: users – Người dân đăng nhập qua Zalo
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS "users" (
+    -- Khóa chính dạng CUID (compatible với Prisma @default(cuid()))
+    "id"           TEXT            NOT NULL,
+    -- Zalo User ID – duy nhất toàn hệ thống
+    "zaloId"       VARCHAR(64)     NOT NULL,
+    -- Tên hiển thị lấy từ Zalo profile
+    "displayName"  VARCHAR(255)    NOT NULL,
+    -- Phone token từ zmp-sdk.getPhoneNumber() – KHÔNG lưu số điện thoại trực tiếp
+    -- Lý do bảo mật: số ĐT là dữ liệu cá nhân nhạy cảm theo NĐ 13/2023/NĐ-CP
+    "phoneToken"   TEXT,
+    -- Timestamps
+    "createdAt"    TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+    "updatedAt"    TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT "users_pkey" PRIMARY KEY ("id"),
+    CONSTRAINT "users_zaloId_key" UNIQUE ("zaloId"),
+    -- Đảm bảo displayName không rỗng
+    CONSTRAINT "users_displayName_check" CHECK (LENGTH(TRIM("displayName")) > 0)
+);
+
+COMMENT ON TABLE  "users"               IS 'Người dân đã đăng nhập vào Mini App qua tài khoản Zalo';
+COMMENT ON COLUMN "users"."id"          IS 'Khóa chính dạng CUID, tương thích Prisma';
+COMMENT ON COLUMN "users"."zaloId"      IS 'User ID từ Zalo platform – duy nhất, bất biến';
+COMMENT ON COLUMN "users"."displayName" IS 'Tên hiển thị Zalo, cập nhật mỗi lần đăng nhập';
+COMMENT ON COLUMN "users"."phoneToken"  IS 'Token tạm thời để back-end lấy SĐT từ Zalo API – không lưu SĐT trực tiếp';
+
+-- -----------------------------------------------------------------------------
+-- BẢNG 2: feedbacks – Phản ánh hiện trường
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS "feedbacks" (
+    "id"           TEXT                NOT NULL,
+    -- Mã phản ánh có định dạng: PA-YYYY-NNNN (VD: PA-2026-0042)
+    "code"         VARCHAR(20)         NOT NULL,
+    -- Liên kết đến người dân
+    "userId"       TEXT                NOT NULL,
+    -- Tiêu đề ngắn gọn (10–100 ký tự theo validation front-end)
+    "title"        VARCHAR(100)        NOT NULL,
+    -- Danh mục phân loại
+    "category"     "FeedbackCategory"  NOT NULL,
+    -- Mô tả chi tiết (tối đa 1000 ký tự theo front-end)
+    "description"  TEXT                NOT NULL,
+    -- Mảng URL ảnh Cloudinary (JSON array, tối đa 3 ảnh)
+    "imageUrls"    TEXT[]              NOT NULL DEFAULT '{}',
+    -- Toạ độ GPS (nullable – người dân có thể từ chối cung cấp)
+    "latitude"     DOUBLE PRECISION,
+    "longitude"    DOUBLE PRECISION,
+    -- Địa chỉ văn bản (nhập thủ công nếu không có GPS)
+    "address"      TEXT,
+    -- Trạng thái xử lý
+    "status"       "FeedbackStatus"    NOT NULL DEFAULT 'PENDING',
+    -- Nội dung phản hồi từ cán bộ (điền khi xử lý xong)
+    "response"     TEXT,
+    "respondedAt"  TIMESTAMPTZ,
+    -- Message ID từ Zalo OA API – dùng để mapping Webhook reply của cán bộ
+    "oaMessageId"  TEXT,
+    -- Timestamps
+    "createdAt"    TIMESTAMPTZ         NOT NULL DEFAULT NOW(),
+    "updatedAt"    TIMESTAMPTZ         NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT "feedbacks_pkey"         PRIMARY KEY ("id"),
+    CONSTRAINT "feedbacks_code_key"     UNIQUE ("code"),
+    CONSTRAINT "feedbacks_userId_fkey"  FOREIGN KEY ("userId")
+        REFERENCES "users"("id")
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+    -- Đảm bảo title không rỗng
+    CONSTRAINT "feedbacks_title_check"  CHECK (LENGTH(TRIM("title")) >= 5),
+    -- Đảm bảo description không rỗng
+    CONSTRAINT "feedbacks_desc_check"   CHECK (LENGTH(TRIM("description")) >= 10),
+    -- Tối đa 3 ảnh
+    CONSTRAINT "feedbacks_images_check" CHECK (array_length("imageUrls", 1) IS NULL
+                                             OR array_length("imageUrls", 1) <= 3),
+    -- Tọa độ: hoặc cả hai đều có, hoặc cả hai đều NULL
+    CONSTRAINT "feedbacks_coords_check" CHECK (
+        ("latitude" IS NULL AND "longitude" IS NULL) OR
+        ("latitude" IS NOT NULL AND "longitude" IS NOT NULL)
+    ),
+    -- Latitude trong khoảng hợp lệ
+    CONSTRAINT "feedbacks_lat_range"    CHECK (
+        "latitude" IS NULL OR ("latitude" >= -90 AND "latitude" <= 90)
+    ),
+    -- Longitude trong khoảng hợp lệ
+    CONSTRAINT "feedbacks_lng_range"    CHECK (
+        "longitude" IS NULL OR ("longitude" >= -180 AND "longitude" <= 180)
+    ),
+    -- Nếu đã có response thì phải có respondedAt và ngược lại
+    CONSTRAINT "feedbacks_response_check" CHECK (
+        ("response" IS NULL AND "respondedAt" IS NULL) OR
+        ("response" IS NOT NULL AND "respondedAt" IS NOT NULL)
+    ),
+    -- Mã phản ánh đúng định dạng PA-YYYY-NNNN
+    CONSTRAINT "feedbacks_code_format"  CHECK ("code" ~ '^PA-[0-9]{4}-[0-9]{4}$')
+);
+
+COMMENT ON TABLE  "feedbacks"                IS 'Phản ánh, kiến nghị của người dân về các vấn đề trên địa bàn phường';
+COMMENT ON COLUMN "feedbacks"."code"         IS 'Mã phản ánh tự động: PA-YYYY-NNNN, dùng để tra cứu';
+COMMENT ON COLUMN "feedbacks"."imageUrls"    IS 'Mảng URL ảnh Cloudinary, tối đa 3 ảnh';
+COMMENT ON COLUMN "feedbacks"."oaMessageId"  IS 'Message ID từ Zalo OA API – dùng để map reply Webhook của cán bộ';
+COMMENT ON COLUMN "feedbacks"."respondedAt"  IS 'Thời điểm cán bộ phản hồi qua OA Manager';
+
+-- -----------------------------------------------------------------------------
+-- BẢNG 3: bookings – Đặt lịch tiếp dân
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS "bookings" (
+    "id"               TEXT              NOT NULL,
+    -- Mã lịch hẹn: LH-YYYY-NNNN (VD: LH-2026-0015)
+    "code"             VARCHAR(20)       NOT NULL,
+    -- Liên kết người dân
+    "userId"           TEXT              NOT NULL,
+    -- Lĩnh vực cần tư vấn
+    "field"            "BookingField"    NOT NULL,
+    -- Ngày mong muốn (UTC timestamp, phải là ngày trong tương lai khi tạo)
+    "preferredDate"    TIMESTAMPTZ       NOT NULL,
+    -- Khung giờ mong muốn (HH:mm, VD: "09:00")
+    "preferredTime"    VARCHAR(5)        NOT NULL,
+    -- Ngày/giờ đã được cán bộ xác nhận chính xác
+    "confirmedDate"    TIMESTAMPTZ,
+    "confirmedTime"    VARCHAR(5),
+    -- Nội dung cần tư vấn (10–500 ký tự)
+    "description"      TEXT              NOT NULL,
+    -- Họ tên người đến (có thể khác tên Zalo nếu đặt thay)
+    "contactName"      VARCHAR(100)      NOT NULL,
+    -- Trạng thái lịch hẹn
+    "status"           "BookingStatus"   NOT NULL DEFAULT 'PENDING',
+    -- Lý do từ chối (điền khi status = REJECTED)
+    "rejectionReason"  TEXT,
+    -- Ghi chú khi dời lịch (điền khi status = RESCHEDULED)
+    "rescheduledNote"  TEXT,
+    -- Cờ theo dõi đã gửi ZNS nhắc lịch chưa (cho cron job)
+    "reminder24hSent"  BOOLEAN           NOT NULL DEFAULT FALSE,
+    "reminder1hSent"   BOOLEAN           NOT NULL DEFAULT FALSE,
+    -- Message ID Zalo OA đã gửi vào OA Manager
+    "oaMessageId"      TEXT,
+    -- Timestamps
+    "createdAt"        TIMESTAMPTZ       NOT NULL DEFAULT NOW(),
+    "updatedAt"        TIMESTAMPTZ       NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT "bookings_pkey"              PRIMARY KEY ("id"),
+    CONSTRAINT "bookings_code_key"          UNIQUE ("code"),
+    CONSTRAINT "bookings_userId_fkey"       FOREIGN KEY ("userId")
+        REFERENCES "users"("id")
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+    -- Định dạng mã lịch hẹn
+    CONSTRAINT "bookings_code_format"       CHECK ("code" ~ '^LH-[0-9]{4}-[0-9]{4}$'),
+    -- preferredTime đúng định dạng HH:mm
+    CONSTRAINT "bookings_prefTime_format"   CHECK ("preferredTime" ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'),
+    -- confirmedTime đúng định dạng HH:mm (nếu có)
+    CONSTRAINT "bookings_confTime_format"   CHECK (
+        "confirmedTime" IS NULL OR
+        "confirmedTime" ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+    ),
+    -- Nếu confirmedDate có thì confirmedTime phải có và ngược lại
+    CONSTRAINT "bookings_confirmed_check"   CHECK (
+        ("confirmedDate" IS NULL AND "confirmedTime" IS NULL) OR
+        ("confirmedDate" IS NOT NULL AND "confirmedTime" IS NOT NULL)
+    ),
+    -- contactName không rỗng
+    CONSTRAINT "bookings_name_check"        CHECK (LENGTH(TRIM("contactName")) >= 2),
+    -- description không rỗng
+    CONSTRAINT "bookings_desc_check"        CHECK (LENGTH(TRIM("description")) >= 5),
+    -- rejectionReason chỉ có khi status = REJECTED hoặc RESCHEDULED
+    CONSTRAINT "bookings_rejection_check"   CHECK (
+        "rejectionReason" IS NULL OR
+        "status" IN ('REJECTED', 'RESCHEDULED')
+    )
+);
+
+COMMENT ON TABLE  "bookings"                    IS 'Lịch hẹn tiếp dân tại UBND phường Tùng Thiện';
+COMMENT ON COLUMN "bookings"."code"             IS 'Mã lịch hẹn tự động: LH-YYYY-NNNN';
+COMMENT ON COLUMN "bookings"."preferredDate"    IS 'Ngày người dân mong muốn gặp (UTC), chỉ chấp nhận ngày tương lai';
+COMMENT ON COLUMN "bookings"."preferredTime"    IS 'Khung giờ mong muốn: HH:mm (VD: 09:00)';
+COMMENT ON COLUMN "bookings"."confirmedDate"    IS 'Ngày được cán bộ xác nhận (UTC) – điền qua Webhook reply';
+COMMENT ON COLUMN "bookings"."reminder24hSent"  IS 'TRUE nếu đã gửi ZNS nhắc trước 24 giờ (cron job)';
+COMMENT ON COLUMN "bookings"."reminder1hSent"   IS 'TRUE nếu đã gửi ZNS nhắc trước 1 giờ (cron job)';
+COMMENT ON COLUMN "bookings"."oaMessageId"      IS 'Message ID Zalo OA gửi vào hộp thư cán bộ – dùng map Webhook reply';
+
+-- -----------------------------------------------------------------------------
+-- BẢNG 4: ratings – Đánh giá dịch vụ công
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS "ratings" (
+    "id"              TEXT         NOT NULL,
+    -- Liên kết người dân
+    "userId"          TEXT         NOT NULL,
+    -- Lĩnh vực thủ tục đã sử dụng (lưu label tiếng Việt hoặc value enum)
+    "procedure"       VARCHAR(100) NOT NULL,
+    -- Điểm theo từng tiêu chí (1–5)
+    "attitudeScore"   SMALLINT     NOT NULL,
+    "timelinessScore" SMALLINT     NOT NULL,
+    "outcomeScore"    SMALLINT     NOT NULL,
+    -- Điểm trung bình tự động (tính bằng trigger hoặc service layer)
+    "averageScore"    NUMERIC(3,1) NOT NULL,
+    -- Nhận xét tự do (tùy chọn)
+    "comment"         TEXT,
+    -- Đã gửi cảnh báo vào OA Manager cho đánh giá thấp chưa
+    "alertSent"       BOOLEAN      NOT NULL DEFAULT FALSE,
+    -- Timestamp (chỉ lưu createdAt – rating không được sửa sau khi gửi)
+    "createdAt"       TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT "ratings_pkey"             PRIMARY KEY ("id"),
+    CONSTRAINT "ratings_userId_fkey"      FOREIGN KEY ("userId")
+        REFERENCES "users"("id")
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+    -- Điểm phải trong khoảng 1–5
+    CONSTRAINT "ratings_attitude_check"   CHECK ("attitudeScore"   BETWEEN 1 AND 5),
+    CONSTRAINT "ratings_timeliness_check" CHECK ("timelinessScore" BETWEEN 1 AND 5),
+    CONSTRAINT "ratings_outcome_check"    CHECK ("outcomeScore"    BETWEEN 1 AND 5),
+    -- averageScore trong khoảng 1.0–5.0
+    CONSTRAINT "ratings_avg_check"        CHECK ("averageScore" BETWEEN 1.0 AND 5.0),
+    -- procedure không rỗng
+    CONSTRAINT "ratings_procedure_check"  CHECK (LENGTH(TRIM("procedure")) > 0)
+);
+
+COMMENT ON TABLE  "ratings"                  IS 'Đánh giá mức độ hài lòng của người dân về dịch vụ hành chính công';
+COMMENT ON COLUMN "ratings"."attitudeScore"  IS 'Điểm thái độ phục vụ của cán bộ (1–5)';
+COMMENT ON COLUMN "ratings"."timelinessScore"IS 'Điểm thời gian giải quyết hồ sơ (1–5)';
+COMMENT ON COLUMN "ratings"."outcomeScore"   IS 'Điểm kết quả giải quyết thủ tục (1–5)';
+COMMENT ON COLUMN "ratings"."averageScore"   IS 'Điểm trung bình tự động, 1 chữ số thập phân';
+COMMENT ON COLUMN "ratings"."alertSent"      IS 'TRUE nếu đã gửi cảnh báo OA Manager cho đánh giá ≤ 2 sao';
+
+
+-- =============================================================================
+-- BƯỚC 4: TẠO INDEX
+-- =============================================================================
+
+-- Index cho users
+CREATE INDEX IF NOT EXISTS "users_zaloId_idx"
+    ON "users" ("zaloId");
+
+CREATE INDEX IF NOT EXISTS "users_createdAt_idx"
+    ON "users" ("createdAt" DESC);
+
+-- Index cho feedbacks
+CREATE INDEX IF NOT EXISTS "feedbacks_userId_idx"
+    ON "feedbacks" ("userId");
+
+CREATE INDEX IF NOT EXISTS "feedbacks_status_idx"
+    ON "feedbacks" ("status");
+
+CREATE INDEX IF NOT EXISTS "feedbacks_createdAt_idx"
+    ON "feedbacks" ("createdAt" DESC);
+
+-- Index kết hợp: lọc phản ánh theo user + status (dùng trong API /feedbacks/me?status=...)
+CREATE INDEX IF NOT EXISTS "feedbacks_userId_status_idx"
+    ON "feedbacks" ("userId", "status");
+
+-- Index tra cứu Webhook mapping
+CREATE INDEX IF NOT EXISTS "feedbacks_oaMessageId_idx"
+    ON "feedbacks" ("oaMessageId")
+    WHERE "oaMessageId" IS NOT NULL;
+
+-- Index cho bookings
+CREATE INDEX IF NOT EXISTS "bookings_userId_idx"
+    ON "bookings" ("userId");
+
+CREATE INDEX IF NOT EXISTS "bookings_status_idx"
+    ON "bookings" ("status");
+
+CREATE INDEX IF NOT EXISTS "bookings_confirmedDate_idx"
+    ON "bookings" ("confirmedDate")
+    WHERE "confirmedDate" IS NOT NULL;
+
+-- Index kết hợp: cron job nhắc lịch (CONFIRMED + reminder chưa gửi + confirmedDate sắp đến)
+CREATE INDEX IF NOT EXISTS "bookings_reminder_idx"
+    ON "bookings" ("status", "confirmedDate", "reminder24hSent", "reminder1hSent")
+    WHERE "status" = 'CONFIRMED';
+
+-- Index kết hợp: lịch hẹn theo user + status
+CREATE INDEX IF NOT EXISTS "bookings_userId_status_idx"
+    ON "bookings" ("userId", "status");
+
+-- Index tra cứu Webhook mapping
+CREATE INDEX IF NOT EXISTS "bookings_oaMessageId_idx"
+    ON "bookings" ("oaMessageId")
+    WHERE "oaMessageId" IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS "bookings_createdAt_idx"
+    ON "bookings" ("createdAt" DESC);
+
+-- Index cho ratings
+CREATE INDEX IF NOT EXISTS "ratings_userId_idx"
+    ON "ratings" ("userId");
+
+CREATE INDEX IF NOT EXISTS "ratings_createdAt_idx"
+    ON "ratings" ("createdAt" DESC);
+
+-- Index cho thống kê tổng hợp averageScore (dùng trong GET /ratings/summary)
+CREATE INDEX IF NOT EXISTS "ratings_avgScore_idx"
+    ON "ratings" ("averageScore");
+
+-- Index lọc cảnh báo chưa gửi
+CREATE INDEX IF NOT EXISTS "ratings_alert_idx"
+    ON "ratings" ("alertSent", "averageScore")
+    WHERE "alertSent" = FALSE;
+
+
+-- =============================================================================
+-- BƯỚC 5: TẠO TRIGGER TỰ ĐỘNG CẬP NHẬT updatedAt
+-- =============================================================================
+
+-- Function dùng chung cho tất cả trigger
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW."updatedAt" = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION update_updated_at_column()
+    IS 'Tự động cập nhật cột updatedAt về thời điểm hiện tại khi có UPDATE';
+
+-- Trigger cho bảng users
+CREATE OR REPLACE TRIGGER "users_updatedAt_trigger"
+    BEFORE UPDATE ON "users"
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- Trigger cho bảng feedbacks
+CREATE OR REPLACE TRIGGER "feedbacks_updatedAt_trigger"
+    BEFORE UPDATE ON "feedbacks"
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- Trigger cho bảng bookings
+CREATE OR REPLACE TRIGGER "bookings_updatedAt_trigger"
+    BEFORE UPDATE ON "bookings"
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+
+-- =============================================================================
+-- BƯỚC 6: TẠO TRIGGER KIỂM TRA NGHIỆP VỤ (Business Rule Triggers)
+-- =============================================================================
+
+-- Trigger 6.1: Kiểm tra preferredDate phải là ngày tương lai khi INSERT booking
+CREATE OR REPLACE FUNCTION check_booking_future_date()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW."preferredDate" <= NOW() THEN
+        RAISE EXCEPTION
+            'preferred_date phải là ngày trong tương lai (nhận được: %)',
+            NEW."preferredDate"
+            USING ERRCODE = 'check_violation';
+    END IF;
+
+    -- Kiểm tra không phải thứ 7 (6) hoặc chủ nhật (0) theo UTC
+    IF EXTRACT(DOW FROM NEW."preferredDate" AT TIME ZONE 'Asia/Ho_Chi_Minh') IN (0, 6) THEN
+        RAISE EXCEPTION
+            'preferred_date không được là thứ 7 hoặc chủ nhật'
+            USING ERRCODE = 'check_violation';
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE TRIGGER "bookings_future_date_trigger"
+    BEFORE INSERT ON "bookings"
+    FOR EACH ROW
+    EXECUTE FUNCTION check_booking_future_date();
+
+COMMENT ON FUNCTION check_booking_future_date()
+    IS 'Đảm bảo preferredDate phải là ngày tương lai và không phải cuối tuần';
+
+-- Trigger 6.2: Kiểm tra điều kiện hủy lịch (tối thiểu 2 giờ trước giờ hẹn)
+CREATE OR REPLACE FUNCTION check_booking_cancellable()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Chỉ áp dụng khi chuyển status sang CANCELLED
+    IF NEW."status" = 'CANCELLED' AND OLD."status" != 'CANCELLED' THEN
+        -- Chỉ cho hủy khi đang ở PENDING hoặc CONFIRMED
+        IF OLD."status" NOT IN ('PENDING', 'CONFIRMED') THEN
+            RAISE EXCEPTION
+                'Không thể hủy lịch hẹn đang ở trạng thái: %',
+                OLD."status"
+                USING ERRCODE = 'check_violation';
+        END IF;
+
+        -- Nếu đã CONFIRMED: kiểm tra còn ít nhất 2 giờ
+        IF OLD."status" = 'CONFIRMED' AND OLD."confirmedDate" IS NOT NULL THEN
+            IF OLD."confirmedDate" < NOW() + INTERVAL '2 hours' THEN
+                RAISE EXCEPTION
+                    'Không thể hủy lịch hẹn đã được xác nhận khi còn dưới 2 giờ'
+                    USING ERRCODE = 'check_violation';
+            END IF;
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE TRIGGER "bookings_cancellable_trigger"
+    BEFORE UPDATE ON "bookings"
+    FOR EACH ROW
+    EXECUTE FUNCTION check_booking_cancellable();
+
+COMMENT ON FUNCTION check_booking_cancellable()
+    IS 'Kiểm tra điều kiện hủy lịch: chỉ hủy PENDING/CONFIRMED và còn > 2 giờ nếu đã xác nhận';
+
+-- Trigger 6.3: Tự động tính averageScore trong ratings
+CREATE OR REPLACE FUNCTION calculate_average_score()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW."averageScore" = ROUND(
+        (NEW."attitudeScore" + NEW."timelinessScore" + NEW."outcomeScore")::NUMERIC / 3,
+        1
+    );
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE TRIGGER "ratings_calc_avg_trigger"
+    BEFORE INSERT OR UPDATE ON "ratings"
+    FOR EACH ROW
+    EXECUTE FUNCTION calculate_average_score();
+
+COMMENT ON FUNCTION calculate_average_score()
+    IS 'Tự động tính điểm trung bình = (thái độ + thời gian + kết quả) / 3, làm tròn 1 chữ số thập phân';
+
+
+-- =============================================================================
+-- BƯỚC 7: TẠO VIEWS HỖ TRỢ THỐNG KÊ
+-- =============================================================================
+
+-- View 7.1: Thống kê đánh giá tóm tắt (dùng trong GET /api/ratings/summary)
+CREATE OR REPLACE VIEW "v_rating_summary" AS
+SELECT
+    COUNT(*)::INT                                          AS "totalCount",
+    ROUND(AVG("averageScore"), 1)                         AS "averageScore",
+    COUNT(*) FILTER (WHERE ROUND("averageScore") = 5)::INT AS "star5",
+    COUNT(*) FILTER (WHERE ROUND("averageScore") = 4)::INT AS "star4",
+    COUNT(*) FILTER (WHERE ROUND("averageScore") = 3)::INT AS "star3",
+    COUNT(*) FILTER (WHERE ROUND("averageScore") = 2)::INT AS "star2",
+    COUNT(*) FILTER (WHERE ROUND("averageScore") = 1)::INT AS "star1"
+FROM "ratings";
+
+COMMENT ON VIEW "v_rating_summary"
+    IS 'Tóm tắt thống kê đánh giá: tổng số, điểm TB, phân bổ theo sao – dùng cho endpoint GET /api/ratings/summary';
+
+-- View 7.2: Phản ánh kèm thông tin người gửi (dùng trong OA Manager / báo cáo)
+CREATE OR REPLACE VIEW "v_feedback_detail" AS
+SELECT
+    f."id",
+    f."code",
+    f."title",
+    f."category",
+    f."description",
+    f."imageUrls",
+    f."latitude",
+    f."longitude",
+    f."address",
+    f."status",
+    f."response",
+    f."respondedAt",
+    f."oaMessageId",
+    f."createdAt",
+    f."updatedAt",
+    u."displayName"  AS "userName",
+    u."zaloId"       AS "userZaloId"
+FROM "feedbacks" f
+JOIN "users"     u ON u."id" = f."userId";
+
+COMMENT ON VIEW "v_feedback_detail"
+    IS 'Phản ánh hiện trường kèm thông tin người gửi – dùng cho báo cáo nội bộ';
+
+-- View 7.3: Lịch hẹn cần xử lý nhắc lịch bởi cron job
+CREATE OR REPLACE VIEW "v_bookings_need_reminder" AS
+SELECT
+    b."id",
+    b."code",
+    b."userId",
+    b."contactName",
+    b."field",
+    b."confirmedDate",
+    b."confirmedTime",
+    b."reminder24hSent",
+    b."reminder1hSent",
+    u."phoneToken"
+FROM "bookings" b
+JOIN "users"    u ON u."id" = b."userId"
+WHERE
+    b."status" = 'CONFIRMED'
+    AND b."confirmedDate" IS NOT NULL
+    AND b."confirmedDate" > NOW()
+    AND (b."reminder24hSent" = FALSE OR b."reminder1hSent" = FALSE);
+
+COMMENT ON VIEW "v_bookings_need_reminder"
+    IS 'Lịch hẹn CONFIRMED cần gửi ZNS nhắc (chưa qua, chưa gửi nhắc) – dùng cho cron job';
+
+
+-- =============================================================================
+-- BƯỚC 8: DATA MẪU (SEED DATA) – Phục vụ kiểm thử
+-- Xoá hoặc comment block này trước khi triển khai production
+-- =============================================================================
+
+-- Chèn 2 user mẫu
+INSERT INTO "users" ("id", "zaloId", "displayName", "createdAt", "updatedAt")
+VALUES
+    ('user_test_001', 'zalo_id_001', 'Nguyễn Văn An',  NOW(), NOW()),
+    ('user_test_002', 'zalo_id_002', 'Trần Thị Bình',  NOW(), NOW())
+ON CONFLICT ("zaloId") DO NOTHING;
+
+-- Chèn 1 phản ánh mẫu (trạng thái PENDING)
+INSERT INTO "feedbacks" (
+    "id", "code", "userId", "title", "category", "description",
+    "imageUrls", "latitude", "longitude", "address",
+    "status", "createdAt", "updatedAt"
+) VALUES (
+    'feedback_test_001',
+    'PA-2026-0001',
+    'user_test_001',
+    'Đường Nguyễn Trãi bị lún nứt đoạn gần số nhà 15',
+    'HA_TANG',
+    'Đoạn đường bị lún sâu khoảng 10cm, gây nguy hiểm cho người đi xe máy vào buổi tối do không có đèn đường. Đề nghị phường xem xét sửa chữa gấp.',
+    '{}',
+    21.027763,
+    105.834160,
+    'Đường Nguyễn Trãi, gần số nhà 15, phường Tùng Thiện',
+    'PENDING',
+    NOW(),
+    NOW()
+) ON CONFLICT ("code") DO NOTHING;
+
+-- Chèn 1 lịch hẹn mẫu (trạng thái PENDING)
+INSERT INTO "bookings" (
+    "id", "code", "userId", "field",
+    "preferredDate", "preferredTime",
+    "description", "contactName",
+    "status", "createdAt", "updatedAt"
+) VALUES (
+    'booking_test_001',
+    'LH-2026-0001',
+    'user_test_002',
+    'HO_TICH',
+    NOW() + INTERVAL '3 days',
+    '09:00',
+    'Tôi cần tư vấn về thủ tục đăng ký khai sinh cho con mới sinh. Mong được hướng dẫn về các giấy tờ cần chuẩn bị.',
+    'Trần Thị Bình',
+    'PENDING',
+    NOW(),
+    NOW()
+) ON CONFLICT ("code") DO NOTHING;
+
+-- Chèn 1 đánh giá mẫu (averageScore tự tính bởi trigger)
+INSERT INTO "ratings" (
+    "id", "userId", "procedure",
+    "attitudeScore", "timelinessScore", "outcomeScore",
+    "averageScore",  -- Trigger sẽ tính lại, nhưng cần giá trị tạm để bypass NOT NULL
+    "comment", "alertSent", "createdAt"
+) VALUES (
+    'rating_test_001',
+    'user_test_001',
+    'Chứng thực giấy tờ',
+    5, 4, 5,
+    0.0,  -- Trigger sẽ tính lại thành 4.7
+    'Cán bộ nhiệt tình, hướng dẫn rõ ràng. Thủ tục đơn giản, không phải đi lại nhiều lần.',
+    FALSE,
+    NOW()
+) ON CONFLICT DO NOTHING;
+
+
+-- =============================================================================
+-- BƯỚC 9: XÁC NHẬN KẾT QUẢ
+-- =============================================================================
+
+-- Kiểm tra tất cả bảng đã tạo
+DO $$
+DECLARE
+    v_table_count INT;
+    v_enum_count  INT;
+    v_trigger_count INT;
+    v_index_count INT;
+BEGIN
+    SELECT COUNT(*) INTO v_table_count
+    FROM information_schema.tables
+    WHERE table_schema = 'public'
+      AND table_name IN ('users', 'feedbacks', 'bookings', 'ratings');
+
+    SELECT COUNT(*) INTO v_enum_count
+    FROM pg_type t
+    JOIN pg_namespace n ON n.oid = t.typnamespace
+    WHERE n.nspname = 'public'
+      AND t.typtype = 'e'
+      AND t.typname IN (
+          'FeedbackStatus', 'FeedbackCategory',
+          'BookingStatus',  'BookingField'
+      );
+
+    SELECT COUNT(*) INTO v_trigger_count
+    FROM information_schema.triggers
+    WHERE trigger_schema = 'public'
+      AND trigger_name IN (
+          'users_updatedAt_trigger',
+          'feedbacks_updatedAt_trigger',
+          'bookings_updatedAt_trigger',
+          'bookings_future_date_trigger',
+          'bookings_cancellable_trigger',
+          'ratings_calc_avg_trigger'
+      );
+
+    SELECT COUNT(*) INTO v_index_count
+    FROM pg_indexes
+    WHERE schemaname = 'public'
+      AND tablename  IN ('users', 'feedbacks', 'bookings', 'ratings');
+
+    RAISE NOTICE '=================================================';
+    RAISE NOTICE 'KẾT QUẢ KHỞI TẠO DATABASE tungtthien_db';
+    RAISE NOTICE '=================================================';
+    RAISE NOTICE '✅ Bảng đã tạo  : % / 4', v_table_count;
+    RAISE NOTICE '✅ Enum đã tạo  : % / 4', v_enum_count;
+    RAISE NOTICE '✅ Trigger đã tạo: % / 6', v_trigger_count;
+    RAISE NOTICE '✅ Index đã tạo : %',      v_index_count;
+    RAISE NOTICE '=================================================';
+
+    IF v_table_count = 4 AND v_enum_count = 4 AND v_trigger_count = 6 THEN
+        RAISE NOTICE '🎉 Khởi tạo thành công! Database sẵn sàng sử dụng.';
+    ELSE
+        RAISE WARNING '⚠️  Một số đối tượng chưa được tạo. Vui lòng kiểm tra lại.';
+    END IF;
+    RAISE NOTICE '=================================================';
+END;
+$$;
