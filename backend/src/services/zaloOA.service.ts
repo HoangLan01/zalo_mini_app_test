@@ -3,9 +3,109 @@ import axios from 'axios';
 import logger from '../utils/logger';
 import { Feedback, Booking, User, Rating, FeedbackCategory, BookingField } from '@prisma/client';
 
-const getBaseHeaders = () => ({
+import { prisma } from '../server';
+import qs from 'qs';
+
+let cachedAccessToken: string | null = null;
+
+export const getOAToken = async (): Promise<string> => {
+  try {
+    let tokenRecord = await prisma.oAToken.findUnique({ where: { id: 'default' } });
+
+    if (!tokenRecord) {
+      // Tự động nạp từ .env nếu bảng trống (Auto-seed)
+      const envToken = process.env.ZALO_OA_ACCESS_TOKEN;
+      const envRefresh = process.env.ZALO_OA_REFRESH_KEY;
+      
+      if (envToken && envRefresh) {
+        logger.info('Auto-seeding OAToken from .env...');
+        tokenRecord = await prisma.oAToken.create({
+          data: {
+            id: 'default',
+            accessToken: envToken,
+            refreshToken: envRefresh,
+            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // Tạm tính 24h
+          }
+        });
+      } else {
+        logger.warn('No OAToken found in DB and no valid .env fallback.');
+        return envToken || '';
+      }
+    }
+
+    // Nếu sắp hết hạn (trước 10 phút), làm mới
+    if (tokenRecord.expiresAt.getTime() - Date.now() < 10 * 60 * 1000) {
+      return await refreshOAToken(tokenRecord.refreshToken);
+    }
+
+    cachedAccessToken = tokenRecord.accessToken;
+    return tokenRecord.accessToken;
+  } catch (error) {
+    logger.error('Error getting OA token from DB:', error);
+    return process.env.ZALO_OA_ACCESS_TOKEN || '';
+  }
+};
+
+export const refreshOAToken = async (refreshToken: string): Promise<string> => {
+  try {
+    const appId = process.env.ZALO_APP_ID;
+    const secretKey = process.env.ZALO_APP_SECRET;
+
+    if (!appId || !secretKey) {
+      throw new Error('Missing ZALO_APP_ID or ZALO_APP_SECRET in .env');
+    }
+
+    const response = await axios.post(
+      'https://oauth.zaloapp.com/v4/oa/access_token',
+      qs.stringify({
+        refresh_token: refreshToken,
+        app_id: appId,
+        grant_type: 'refresh_token'
+      }),
+      {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'secret_key': secretKey
+        }
+      }
+    );
+
+    const { access_token, refresh_token, expires_in } = response.data;
+    
+    if (!access_token || !refresh_token) {
+      throw new Error(`Failed to refresh token: ${JSON.stringify(response.data)}`);
+    }
+
+    const expiresAt = new Date(Date.now() + parseInt(expires_in) * 1000);
+    
+    await prisma.oAToken.upsert({
+      where: { id: 'default' },
+      update: {
+        accessToken: access_token,
+        refreshToken: refresh_token,
+        expiresAt
+      },
+      create: {
+        id: 'default',
+        accessToken: access_token,
+        refreshToken: refresh_token,
+        expiresAt
+      }
+    });
+
+    logger.info('OA Token refreshed successfully');
+    cachedAccessToken = access_token;
+    return access_token;
+
+  } catch (error: any) {
+    logger.error('Error refreshing OA token:', error.response?.data || error.message);
+    return cachedAccessToken || '';
+  }
+};
+
+const getBaseHeaders = async () => ({
   'Content-Type': 'application/json',
-  'access_token': process.env.ZALO_OA_ACCESS_TOKEN || ''
+  'access_token': await getOAToken()
 });
 
 export const sendMessageToUser = async (recipientZaloId: string, message: object): Promise<string | null> => {
@@ -16,7 +116,7 @@ export const sendMessageToUser = async (recipientZaloId: string, message: object
         recipient: { user_id: recipientZaloId },
         message
       },
-      { headers: getBaseHeaders() }
+      { headers: await getBaseHeaders() }
     );
 
     const data = response.data;
@@ -139,4 +239,33 @@ Thủ tục: ${rating.procedure}
 Nhận xét: ${rating.comment || 'Không có'}`;
 
   await sendMessageToUser(leaderId, { text: textContent });
+};
+
+export const getOAArticles = async (offset: number = 0, limit: number = 10) => {
+  try {
+    const headers = await getBaseHeaders();
+    const url = `https://openapi.zalo.me/v2.0/article/getslice?offset=${offset}&limit=${limit}&type=normal`;
+    logger.info(`Fetching OA articles: ${url}`);
+    logger.info(`Using access_token (first 20 chars): ${headers.access_token?.substring(0, 20)}...`);
+    
+    const response = await axios.get(url, { headers });
+    logger.info(`OA getslice raw response status: ${response.status}, data: ${JSON.stringify(response.data).substring(0, 500)}`);
+    return response.data;
+  } catch (error: any) {
+    logger.error('Error fetching OA articles:', error.response?.data || error.message);
+    return null;
+  }
+};
+
+export const getOAArticleDetail = async (id: string) => {
+  try {
+    const response = await axios.get(
+      `https://openapi.zalo.me/v2.0/article/getdetail?id=${id}`,
+      { headers: await getBaseHeaders() }
+    );
+    return response.data;
+  } catch (error: any) {
+    logger.error(`Error fetching OA article detail for ${id}:`, error.response?.data || error.message);
+    return null;
+  }
 };

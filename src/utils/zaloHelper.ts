@@ -2,7 +2,7 @@ import { getUserInfo, getAccessToken, getPhoneNumber, openWebview } from 'zmp-sd
 
 export async function getZaloUserInfo() {
   try {
-    const { userInfo } = await getUserInfo({ autoLogin: true });
+    const { userInfo } = await getUserInfo({ autoRequestPermission: true });
     return userInfo;
   } catch (error) {
     console.error('Error fetching Zalo User Info:', error);
@@ -12,8 +12,8 @@ export async function getZaloUserInfo() {
 
 export async function getZaloAccessToken(): Promise<string | null> {
   try {
-    const { accessToken } = await getAccessToken();
-    return accessToken;
+    const accessToken = await getAccessToken();
+    return accessToken as string;
   } catch (error) {
     console.error('Error fetching Access Token:', error);
     return null;
@@ -23,7 +23,7 @@ export async function getZaloAccessToken(): Promise<string | null> {
 export async function requestPhoneNumber(): Promise<string | null> {
   try {
     const { token } = await getPhoneNumber({});
-    return token;
+    return token ?? null;
   } catch (error) {
     console.error('Error requesting phone number token:', error);
     return null;
@@ -33,7 +33,7 @@ export async function requestPhoneNumber(): Promise<string | null> {
 export function openExternalUrl(url: string, title?: string) {
   try {
     // Gọi Zalo SDK Webview
-    openWebview({ url, title: title || '' });
+    openWebview({ url });
     
     // Dự phòng cho môi trường localhost/Web giả lập:
     // Vì openWebview không hoạt động trên web PC, nên mở thêm window.open

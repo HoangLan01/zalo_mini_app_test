@@ -38,46 +38,76 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 -- =============================================================================
 
 -- 2.1 Trạng thái phản ánh hiện trường
-CREATE TYPE "FeedbackStatus" AS ENUM (
-    'PENDING',       -- Đang tiếp nhận
-    'PROCESSING',    -- Đang xử lý
-    'TRANSFERRED',   -- Đã chuyển đơn vị
-    'RESOLVED'       -- Đã giải quyết
-);
+DO $$ BEGIN
+    CREATE TYPE "FeedbackStatus" AS ENUM (
+        'PENDING',       -- Đang tiếp nhận
+        'PROCESSING',    -- Đang xử lý
+        'TRANSFERRED',   -- Đã chuyển đơn vị
+        'RESOLVED'       -- Đã giải quyết
+    );
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
 COMMENT ON TYPE "FeedbackStatus" IS 'Trạng thái xử lý phản ánh hiện trường';
 
 -- 2.2 Danh mục phản ánh
-CREATE TYPE "FeedbackCategory" AS ENUM (
-    'HA_TANG',    -- Hạ tầng – Đường sá
-    'VE_SINH',    -- Vệ sinh môi trường
-    'TRAT_TU',    -- Trật tự đô thị
-    'AN_NINH',    -- An ninh – Trật tự
-    'KHAC'        -- Vấn đề khác
-);
+DO $$ BEGIN
+    CREATE TYPE "FeedbackCategory" AS ENUM (
+        'HA_TANG',    -- Hạ tầng – Đường sá
+        'VE_SINH',    -- Vệ sinh môi trường
+        'TRAT_TU',    -- Trật tự đô thị
+        'AN_NINH',    -- An ninh – Trật tự
+        'KHAC'        -- Vấn đề khác
+    );
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
 COMMENT ON TYPE "FeedbackCategory" IS 'Danh mục phân loại phản ánh hiện trường';
 
 -- 2.3 Trạng thái lịch hẹn
-CREATE TYPE "BookingStatus" AS ENUM (
-    'PENDING',      -- Chờ xác nhận
-    'CONFIRMED',    -- Đã xác nhận
-    'REJECTED',     -- Từ chối
-    'RESCHEDULED',  -- Đã dời lịch
-    'COMPLETED',    -- Đã hoàn thành
-    'CANCELLED'     -- Người dân hủy
-);
+DO $$ BEGIN
+    CREATE TYPE "BookingStatus" AS ENUM (
+        'PENDING',      -- Chờ xác nhận
+        'CONFIRMED',    -- Đã xác nhận
+        'REJECTED',     -- Từ chối
+        'RESCHEDULED',  -- Đã dời lịch
+        'COMPLETED',    -- Đã hoàn thành
+        'CANCELLED'     -- Người dân hủy
+    );
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
 COMMENT ON TYPE "BookingStatus" IS 'Trạng thái lịch hẹn tiếp dân';
 
 -- 2.4 Lĩnh vực đặt lịch
-CREATE TYPE "BookingField" AS ENUM (
-    'HO_TICH',    -- Hộ tịch (khai sinh, khai tử, kết hôn...)
-    'CU_TRU',     -- Cư trú (đăng ký tạm trú, thường trú...)
-    'CHUNG_THUC', -- Chứng thực giấy tờ
-    'DAT_DAI',    -- Đất đai – Xây dựng
-    'XA_HOI',     -- Chính sách xã hội
-    'KHAC'        -- Vấn đề khác
-);
+DO $$ BEGIN
+    CREATE TYPE "BookingField" AS ENUM (
+        'HO_TICH',    -- Hộ tịch (khai sinh, khai tử, kết hôn...)
+        'CU_TRU',     -- Cư trú (đăng ký tạm trú, thường trú...)
+        'CHUNG_THUC', -- Chứng thực giấy tờ
+        'DAT_DAI',    -- Đất đai – Xây dựng
+        'XA_HOI',     -- Chính sách xã hội
+        'KHAC'        -- Vấn đề khác
+    );
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
 COMMENT ON TYPE "BookingField" IS 'Lĩnh vực cần tư vấn khi đặt lịch tiếp dân';
 
+
+-- -----------------------------------------------------------------------------
+-- BƯỚC 2.5: CÁC HÀM TIỆN ÍCH (UTIL FUNCTIONS)
+-- -----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW."updatedAt" = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION update_updated_at_column()
+    IS 'Tự động cập nhật cột updatedAt về thời điểm hiện tại khi có UPDATE';
 
 -- =============================================================================
 -- BƯỚC 3: TẠO CÁC BẢNG CHÍNH
@@ -308,6 +338,51 @@ COMMENT ON COLUMN "ratings"."averageScore"   IS 'Điểm trung bình tự độn
 COMMENT ON COLUMN "ratings"."alertSent"      IS 'TRUE nếu đã gửi cảnh báo OA Manager cho đánh giá ≤ 2 sao';
 
 
+-- -----------------------------------------------------------------------------
+-- BẢNG 5: oa_tokens – Quản lý Token của Zalo OA
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS "oa_tokens" (
+    "id"            TEXT         NOT NULL, -- Thường chỉ có 1 dòng duy nhất, ví dụ 'default'
+    "accessToken"   TEXT         NOT NULL,
+    "refreshToken"  TEXT         NOT NULL,
+    "expiresAt"     TIMESTAMPTZ  NOT NULL,
+    "createdAt"     TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    "updatedAt"     TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT "oa_tokens_pkey" PRIMARY KEY ("id")
+);
+COMMENT ON TABLE "oa_tokens" IS 'Lưu trữ Access Token và Refresh Token của Zalo OA để tự động làm mới';
+
+-- Trigger cập nhật updatedAt cho oa_tokens
+CREATE OR REPLACE TRIGGER "oa_tokens_updatedAt_trigger"
+    BEFORE UPDATE ON "oa_tokens"
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- -----------------------------------------------------------------------------
+-- BẢNG 6: articles – Bài viết đồng bộ từ Zalo OA
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS "articles" (
+    "id"            TEXT         NOT NULL, -- Dùng chính ID bài viết của Zalo
+    "title"         TEXT         NOT NULL,
+    "description"   TEXT,
+    "content"       TEXT,
+    "thumbnailUrl"  TEXT,
+    "category"      VARCHAR(50)  NOT NULL DEFAULT 'Tin tức',
+    "publishedAt"   TIMESTAMPTZ  NOT NULL,
+    "author"        VARCHAR(100) DEFAULT 'Admin',
+    "createdAt"     TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    "updatedAt"     TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT "articles_pkey" PRIMARY KEY ("id")
+);
+COMMENT ON TABLE "articles" IS 'Lưu trữ các bài viết được đồng bộ tự động từ Zalo OA';
+
+-- Trigger cập nhật updatedAt cho articles
+CREATE OR REPLACE TRIGGER "articles_updatedAt_trigger"
+    BEFORE UPDATE ON "articles"
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
 -- =============================================================================
 -- BƯỚC 4: TẠO INDEX
 -- =============================================================================
@@ -382,19 +457,14 @@ CREATE INDEX IF NOT EXISTS "ratings_alert_idx"
     ON "ratings" ("alertSent", "averageScore")
     WHERE "alertSent" = FALSE;
 
+-- Index cho articles
+CREATE INDEX IF NOT EXISTS "articles_publishedAt_idx"
+    ON "articles" ("publishedAt" DESC);
+
 
 -- =============================================================================
 -- BƯỚC 5: TẠO TRIGGER TỰ ĐỘNG CẬP NHẬT updatedAt
 -- =============================================================================
-
--- Function dùng chung cho tất cả trigger
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW."updatedAt" = NOW();
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
 
 COMMENT ON FUNCTION update_updated_at_column()
     IS 'Tự động cập nhật cột updatedAt về thời điểm hiện tại khi có UPDATE';
@@ -654,60 +724,74 @@ INSERT INTO "ratings" (
 -- BƯỚC 9: XÁC NHẬN KẾT QUẢ
 -- =============================================================================
 
--- Kiểm tra tất cả bảng đã tạo
 DO $$
 DECLARE
-    v_table_count INT;
-    v_enum_count  INT;
-    v_trigger_count INT;
-    v_index_count INT;
+    v_missing_tables TEXT[] := '{}';
+    v_missing_enums TEXT[] := '{}';
+    v_missing_triggers TEXT[] := '{}';
+    v_table TEXT;
+    v_enum TEXT;
+    v_trigger TEXT;
+    v_count INT;
 BEGIN
-    SELECT COUNT(*) INTO v_table_count
-    FROM information_schema.tables
-    WHERE table_schema = 'public'
-      AND table_name IN ('users', 'feedbacks', 'bookings', 'ratings');
+    -- 1. Kiểm tra Bảng
+    FOREACH v_table IN ARRAY ARRAY['users', 'feedbacks', 'bookings', 'ratings', 'oa_tokens', 'articles']
+    LOOP
+        SELECT COUNT(*) INTO v_count FROM information_schema.tables 
+        WHERE table_schema = 'public' AND table_name = v_table;
+        IF v_count = 0 THEN v_missing_tables := v_missing_tables || v_table; END IF;
+    END LOOP;
 
-    SELECT COUNT(*) INTO v_enum_count
-    FROM pg_type t
-    JOIN pg_namespace n ON n.oid = t.typnamespace
-    WHERE n.nspname = 'public'
-      AND t.typtype = 'e'
-      AND t.typname IN (
-          'FeedbackStatus', 'FeedbackCategory',
-          'BookingStatus',  'BookingField'
-      );
+    -- 2. Kiểm tra Enum
+    FOREACH v_enum IN ARRAY ARRAY['FeedbackStatus', 'FeedbackCategory', 'BookingStatus', 'BookingField']
+    LOOP
+        SELECT COUNT(*) INTO v_count FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace
+        WHERE n.nspname = 'public' AND t.typtype = 'e' AND t.typname = v_enum;
+        IF v_count = 0 THEN v_missing_enums := v_missing_enums || v_enum; END IF;
+    END LOOP;
 
-    SELECT COUNT(*) INTO v_trigger_count
-    FROM information_schema.triggers
-    WHERE trigger_schema = 'public'
-      AND trigger_name IN (
-          'users_updatedAt_trigger',
-          'feedbacks_updatedAt_trigger',
-          'bookings_updatedAt_trigger',
-          'bookings_future_date_trigger',
-          'bookings_cancellable_trigger',
-          'ratings_calc_avg_trigger'
-      );
+    -- 3. Kiểm tra Trigger
+    FOREACH v_trigger IN ARRAY ARRAY[
+        'users_updatedAt_trigger', 'feedbacks_updatedAt_trigger', 'bookings_updatedAt_trigger',
+        'bookings_future_date_trigger', 'bookings_cancellable_trigger', 'ratings_calc_avg_trigger',
+        'oa_tokens_updatedAt_trigger', 'articles_updatedAt_trigger'
+    ]
+    LOOP
+        SELECT COUNT(*) INTO v_count FROM information_schema.triggers 
+        WHERE trigger_schema = 'public' AND trigger_name = v_trigger;
+        IF v_count = 0 THEN v_missing_triggers := v_missing_triggers || v_trigger; END IF;
+    END LOOP;
 
-    SELECT COUNT(*) INTO v_index_count
-    FROM pg_indexes
-    WHERE schemaname = 'public'
-      AND tablename  IN ('users', 'feedbacks', 'bookings', 'ratings');
-
+    -- In kết quả
     RAISE NOTICE '=================================================';
     RAISE NOTICE 'KẾT QUẢ KHỞI TẠO DATABASE tungtthien_db';
     RAISE NOTICE '=================================================';
-    RAISE NOTICE '✅ Bảng đã tạo  : % / 4', v_table_count;
-    RAISE NOTICE '✅ Enum đã tạo  : % / 4', v_enum_count;
-    RAISE NOTICE '✅ Trigger đã tạo: % / 6', v_trigger_count;
-    RAISE NOTICE '✅ Index đã tạo : %',      v_index_count;
+    
+    IF array_length(v_missing_tables, 1) IS NULL THEN
+        RAISE NOTICE '✅ Tất cả bảng đã tạo đủ (6/6)';
+    ELSE
+        RAISE WARNING '❌ Thiếu bảng: %', array_to_string(v_missing_tables, ', ');
+    END IF;
+
+    IF array_length(v_missing_enums, 1) IS NULL THEN
+        RAISE NOTICE '✅ Tất cả Enum đã tạo đủ (4/4)';
+    ELSE
+        RAISE WARNING '❌ Thiếu Enum: %', array_to_string(v_missing_enums, ', ');
+    END IF;
+
+    IF array_length(v_missing_triggers, 1) IS NULL THEN
+        RAISE NOTICE '✅ Tất cả Trigger đã tạo đủ (8/8)';
+    ELSE
+        RAISE WARNING '❌ Thiếu Trigger: %', array_to_string(v_missing_triggers, ', ');
+    END IF;
+
     RAISE NOTICE '=================================================';
 
-    IF v_table_count = 4 AND v_enum_count = 4 AND v_trigger_count = 6 THEN
+    IF array_length(v_missing_tables, 1) IS NULL AND 
+       array_length(v_missing_enums, 1) IS NULL AND 
+       array_length(v_missing_triggers, 1) IS NULL THEN
         RAISE NOTICE '🎉 Khởi tạo thành công! Database sẵn sàng sử dụng.';
     ELSE
-        RAISE WARNING '⚠️  Một số đối tượng chưa được tạo. Vui lòng kiểm tra lại.';
+        RAISE EXCEPTION 'Vui lòng kiểm tra các lỗi trên và chạy lại script.';
     END IF;
-    RAISE NOTICE '=================================================';
-END;
-$$;
+END $$;

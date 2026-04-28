@@ -3,7 +3,7 @@ import { Page, Box, Text, Icon, Swiper } from 'zmp-ui';
 import { useNavigate } from 'zmp-ui';
 import { useUserStore } from '@/store/userStore';
 import { apiCall } from '@/services/api';
-import BottomNav from '@/components/BottomNav';
+
 
 const IndexPage: React.FC = () => {
   const navigate = useNavigate();
@@ -31,9 +31,9 @@ const IndexPage: React.FC = () => {
     { title: 'Tin tức', icon: '📰', path: '/news' },
     { title: 'Sự kiện', icon: '🎉', path: '/events' },
     { title: 'Di tích', icon: '🏛️', path: '/heritage' },
+    { title: 'Kiến thức CĐS', icon: '💡', path: '/quiz' },
     { title: 'Giáo dục', icon: '🎓', path: '/coming-soon' },
     { title: 'Quy hoạch', icon: '🗺️', path: '/coming-soon' },
-    { title: 'Ẩm thực', icon: '🍜', path: '/coming-soon' },
   ];
 
   const renderServiceBox = (service: any) => (
@@ -110,7 +110,6 @@ const IndexPage: React.FC = () => {
           {otherServices.map(renderServiceBox)}
         </div>
       </Box>
-      <BottomNav />
     </Page>
   );
 };

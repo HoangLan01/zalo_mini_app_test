@@ -20,6 +20,9 @@ async function startServer() {
     import('./jobs/reminderJob').then(({ startReminderJob }) => {
       startReminderJob();
     });
+    import('./jobs/syncNews.job').then(({ startSyncNewsJob }) => {
+      startSyncNewsJob();
+    });
     logger.info('Cron jobs initialized');
 
     // 3. Start Server

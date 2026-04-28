@@ -19,7 +19,7 @@ const BookingIndexPage: React.FC = () => {
   return (
     <Page className="page" style={{ backgroundColor: '#F5F5F5', height: '100%', display: 'flex', flexDirection: 'column' }}>
       <PageHeader title="Đặt lịch tiếp dân" />
-      <Box style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
+      <Box style={{ flex: 1, overflow: 'auto', paddingBottom: '80px', padding: '16px' }}>
         
         {/* Banner */}
         <Box style={{ backgroundColor: '#E8F4FF', borderLeft: '4px solid #0068FF', padding: '16px', borderRadius: '8px', marginBottom: '24px' }}>
@@ -60,7 +60,7 @@ const BookingIndexPage: React.FC = () => {
           
           {bookings.length === 0 && (
              <Box style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: '20px' }}>
-                 <Icon icon="zi-notebox" style={{ fontSize: '48px', color: '#CCCCCC', marginBottom: '16px' }} />
+                 <Icon icon="zi-note" style={{ fontSize: '48px', color: '#CCCCCC', marginBottom: '16px' }} />
                  <Text style={{ color: '#888888' }}>Bạn chưa có lịch hẹn nào</Text>
              </Box>
           )}

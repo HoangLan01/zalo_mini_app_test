@@ -26,7 +26,7 @@ const FeedbackDetailPage: React.FC = () => {
   return (
     <Page className="page" style={{ backgroundColor: '#F5F5F5', height: '100%', display: 'flex', flexDirection: 'column' }}>
       <PageHeader title="Chi tiết phản ánh" />
-      <Box style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
+      <Box style={{ flex: 1, overflow: 'auto', padding: '16px', paddingBottom: '80px' }}>
         <Box style={{ backgroundColor: '#FFFFFF', padding: '16px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', marginBottom: '16px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
             <div style={{ backgroundColor: `${feedback.statusColor}20`, padding: '4px 12px', borderRadius: '16px' }}>

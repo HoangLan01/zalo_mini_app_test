@@ -4,6 +4,10 @@ import { App, ZMPRouter, SnackbarProvider, AnimationRoutes, Route } from 'zmp-ui
 import BottomNav from '@/components/BottomNav';
 import ComingSoon from '@/components/ComingSoon';
 import IndexPage from '@/pages/index/index';
+
+import QuizIndexPage from '@/pages/quiz/index';
+import QuizTakePage from '@/pages/quiz/take';
+import QuizResultPage from '@/pages/quiz/result';
 import DvcPage from '@/pages/dvc/index';
 import IhanoiPage from '@/pages/ihanoi/index';
 import VneidPage from '@/pages/vneid/index';
@@ -44,12 +48,17 @@ const MyApp: React.FC = () => {
             <Route path="/heritage-detail" element={<HeritageDetailPage />} />
             <Route path="/services" element={<ComingSoon title="Dịch vụ" />} />
             <Route path="/profile" element={<ComingSoon title="Cá nhân" />} />
+
+            <Route path="/quiz" element={<QuizIndexPage />} />
+            <Route path="/quiz-take" element={<QuizTakePage />} />
+            <Route path="/quiz-result" element={<QuizResultPage />} />
             <Route path="/dvc" element={<DvcPage />} />
             <Route path="/ihanoi" element={<IhanoiPage />} />
             <Route path="/vneid" element={<VneidPage />} />
             {/* We'll add remaining routes later */}
             <Route path="*" element={<ComingSoon title="Đang phát triển" />} />
           </AnimationRoutes>
+          <BottomNav />
         </ZMPRouter>
       </SnackbarProvider>
     </App>

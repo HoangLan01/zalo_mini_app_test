@@ -23,7 +23,7 @@ const FeedbackCreatePage: React.FC = () => {
       // Yêu cầu quyền truy cập định vị trước
       await authorize({ scopes: ['scope.userLocation'] });
       
-      const { latitude, longitude } = await getLocation({ type: 'wgs84' });
+      const { latitude, longitude } = await getLocation({});
       setLocationObj({ latitude, longitude });
     } catch (e) {
       snackbar.openSnackbar({ type: 'error', text: 'Không thể lấy vị trí. Vui lòng cho phép quyền truy cập vị trí.' });
@@ -163,7 +163,7 @@ const FeedbackCreatePage: React.FC = () => {
         </Box>
       </Box>
 
-      <Box style={{ padding: '16px', backgroundColor: '#FFFFFF', borderTop: '1px solid #E0E0E0' }}>
+      <Box style={{ padding: '16px', paddingBottom: '80px', backgroundColor: '#FFFFFF', borderTop: '1px solid #E0E0E0' }}>
         <Button fullWidth onClick={handleSubmit} loading={submitting}>
           Gửi phản ánh
         </Button>

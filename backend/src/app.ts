@@ -25,8 +25,11 @@ app.use('/webhook/zalo', express.raw({ type: 'application/json' }), webhookRoute
 // 2. HTTP Security Headers
 app.use(helmet());
 
-// 3. CORS
-app.use(cors({ origin: process.env.APP_URL || '*' }));
+// 3. CORS — cho phép frontend dev gọi API (frontend: 5173-5175, backend: 3000)
+app.use(cors({
+  origin: process.env.NODE_ENV === 'development' ? true : (process.env.APP_URL || '*'),
+  credentials: true
+}));
 
 // 4. Body Parser (cho các route khác)
 app.use(express.json({ limit: '10mb' }));

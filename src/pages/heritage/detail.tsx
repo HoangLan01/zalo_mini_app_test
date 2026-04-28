@@ -24,7 +24,7 @@ const HeritageDetailPage: React.FC = () => {
     <Page className="page" style={{ backgroundColor: '#F5F5F5', height: '100%', display: 'flex', flexDirection: 'column' }}>
       <PageHeader title="Chi tiết di tích" />
       
-      <Box style={{ flex: 1, overflow: 'auto' }}>
+      <Box style={{ flex: 1, overflow: 'auto', paddingBottom: '80px' }}>
         {/* Cover Image */}
         <div style={{ width: '100%', height: '240px', position: 'relative' }}>
           <img 

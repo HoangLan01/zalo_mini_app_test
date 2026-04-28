@@ -25,7 +25,7 @@ const FeedbackIndexPage: React.FC = () => {
         </div>
       </div>
       
-      <Box style={{ flex: 1, overflow: 'auto' }}>
+      <Box style={{ flex: 1, overflow: 'auto', paddingBottom: '80px' }}>
         <Tabs id="feedback-tabs" activeKey={activeTab} onChange={(key) => setActiveTab(key as string)}>
           <Tabs.Tab key="mine" label="Của tôi" />
           <Tabs.Tab key="resolved" label="Đã giải quyết" />

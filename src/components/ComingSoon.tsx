@@ -13,7 +13,7 @@ const ComingSoon: React.FC<ComingSoonProps> = ({ title = 'Đang phát triển' }
     <Page style={{ backgroundColor: '#F5F5F5', height: '100%', display: 'flex', flexDirection: 'column' }}>
       <Header title={title} showBackIcon onBackClick={() => navigate(-1)} />
       <Box style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center', padding: '0 24px' }}>
-        <Text size="xxxxLarge" style={{ marginBottom: '16px' }}>🚧</Text>
+        <Text style={{ fontSize: '48px', marginBottom: '16px' }}>🚧</Text>
         <Text size="xLarge" bold style={{ color: '#1A1A1A', marginBottom: '8px' }}>
           {title}
         </Text>

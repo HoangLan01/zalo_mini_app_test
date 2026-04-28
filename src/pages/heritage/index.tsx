@@ -24,7 +24,7 @@ const HeritageIndexPage: React.FC = () => {
         />
       </Box>
 
-      <Box style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
+      <Box style={{ flex: 1, overflow: 'auto', padding: '16px', paddingBottom: '80px' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {filteredList.map(item => (
             <div 

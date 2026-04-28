@@ -1,5 +1,3 @@
-// prisma/schema.prisma
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -9,145 +7,155 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// =============================================
-// MODEL: User – người dân đã đăng nhập qua Zalo
-// =============================================
-model User {
-  id          String   @id @default(cuid())
-  zaloId      String   @unique           // userId từ Zalo platform
-  displayName String                     // Tên Zalo của người dùng
-  phoneToken  String?                    // Token dùng để lấy số ĐT (không lưu số ĐT trực tiếp)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+model OAToken {
+  id           String   @id
+  accessToken  String
+  refreshToken String
+  expiresAt    DateTime @db.Timestamptz(6)
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime @default(now()) @updatedAt @db.Timestamptz(6)
 
-  feedbacks   Feedback[]
-  bookings    Booking[]
-  ratings     Rating[]
-
-  @@index([zaloId])
+  @@map("oa_tokens")
 }
 
-// =============================================
-// MODEL: Feedback – Phản ánh hiện trường
-// =============================================
-model Feedback {
-  id          String         @id @default(cuid())
-  code        String         @unique           // VD: "PA-2026-0042"
-  userId      String
-  user        User           @relation(fields: [userId], references: [id])
+model Article {
+  id           String   @id
+  title        String
+  description  String?
+  content      String?
+  thumbnailUrl String?
+  category     String   @default("Tin tức") @db.VarChar(50)
+  publishedAt  DateTime @db.Timestamptz(6)
+  author       String?  @default("Admin") @db.VarChar(100)
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime @default(now()) @updatedAt @db.Timestamptz(6)
 
-  title       String
+  @@index([publishedAt(sort: Desc)])
+  @@map("articles")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model bookings {
+  id              String        @id
+  code            String        @unique @db.VarChar(20)
+  userId          String
+  field           BookingField
+  preferredDate   DateTime      @db.Timestamptz(6)
+  preferredTime   String        @db.VarChar(5)
+  confirmedDate   DateTime?     @db.Timestamptz(6)
+  confirmedTime   String?       @db.VarChar(5)
+  description     String
+  contactName     String        @db.VarChar(100)
+  status          BookingStatus @default(PENDING)
+  rejectionReason String?
+  rescheduledNote String?
+  reminder24hSent Boolean       @default(false)
+  reminder1hSent  Boolean       @default(false)
+  oaMessageId     String?
+  createdAt       DateTime      @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime      @default(now()) @db.Timestamptz(6)
+  users           users         @relation(fields: [userId], references: [id])
+
+  @@index([createdAt(sort: Desc)])
+  @@index([status])
+  @@index([userId])
+  @@index([userId, status])
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model feedbacks {
+  id          String           @id
+  code        String           @unique @db.VarChar(20)
+  userId      String
+  title       String           @db.VarChar(100)
   category    FeedbackCategory
-  description String         @db.Text
-  imageUrls   String[]       // Mảng URL ảnh từ Cloudinary
+  description String
+  imageUrls   String[]         @default([])
   latitude    Float?
   longitude   Float?
   address     String?
+  status      FeedbackStatus   @default(PENDING)
+  response    String?
+  respondedAt DateTime?        @db.Timestamptz(6)
+  oaMessageId String?
+  createdAt   DateTime         @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime         @default(now()) @db.Timestamptz(6)
+  users       users            @relation(fields: [userId], references: [id])
 
-  status      FeedbackStatus @default(PENDING)
-  response    String?        @db.Text         // Phản hồi từ cán bộ
-  respondedAt DateTime?
-
-  // Thông tin tin nhắn OA đã gửi (dùng để mapping khi nhận Webhook reply)
-  oaMessageId String?        // Message ID Zalo OA gán cho tin nhắn đã gửi vào OA Manager
-
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-
-  @@index([userId])
+  @@index([createdAt(sort: Desc)])
   @@index([status])
-  @@index([createdAt])
+  @@index([userId])
+  @@index([userId, status])
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model ratings {
+  id              String   @id
+  userId          String
+  procedure       String   @db.VarChar(100)
+  attitudeScore   Int      @db.SmallInt
+  timelinessScore Int      @db.SmallInt
+  outcomeScore    Int      @db.SmallInt
+  averageScore    Decimal  @db.Decimal(3, 1)
+  comment         String?
+  alertSent       Boolean  @default(false)
+  createdAt       DateTime @default(now()) @db.Timestamptz(6)
+  users           users    @relation(fields: [userId], references: [id])
+
+  @@index([averageScore], map: "ratings_avgScore_idx")
+  @@index([createdAt(sort: Desc)])
+  @@index([userId])
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model users {
+  id          String      @id
+  zaloId      String      @unique @db.VarChar(64)
+  displayName String      @db.VarChar(255)
+  phoneToken  String?
+  createdAt   DateTime    @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime    @default(now()) @db.Timestamptz(6)
+  bookings    bookings[]
+  feedbacks   feedbacks[]
+  ratings     ratings[]
+
+  @@index([createdAt(sort: Desc)])
+  @@index([zaloId])
 }
 
 enum FeedbackStatus {
-  PENDING       // Đang tiếp nhận
-  PROCESSING    // Đang xử lý
-  TRANSFERRED   // Đã chuyển đơn vị
-  RESOLVED      // Đã giải quyết
+  PENDING
+  PROCESSING
+  TRANSFERRED
+  RESOLVED
 }
 
 enum FeedbackCategory {
-  HA_TANG       // Hạ tầng – Đường sá
-  VE_SINH       // Vệ sinh môi trường
-  TRAT_TU       // Trật tự đô thị
-  AN_NINH       // An ninh – Trật tự
-  KHAC          // Vấn đề khác
-}
-
-// =============================================
-// MODEL: Booking – Đặt lịch tiếp dân
-// =============================================
-model Booking {
-  id            String        @id @default(cuid())
-  code          String        @unique           // VD: "LH-2026-0015"
-  userId        String
-  user          User          @relation(fields: [userId], references: [id])
-
-  field         BookingField
-  preferredDate DateTime                        // Ngày mong muốn (UTC)
-  preferredTime String                          // "08:00" (chuỗi HH:mm)
-  confirmedDate DateTime?                       // Ngày đã xác nhận chính xác
-  confirmedTime String?                         // Giờ đã xác nhận chính xác
-  description   String        @db.Text
-  contactName   String                          // Họ tên người đến
-
-  status        BookingStatus @default(PENDING)
-  rejectionReason   String?   @db.Text
-  rescheduledNote   String?   @db.Text
-
-  // Tracking nhắc lịch
-  reminder24hSent   Boolean   @default(false)
-  reminder1hSent    Boolean   @default(false)
-
-  // Mapping Webhook
-  oaMessageId   String?       // Message ID tin nhắn đã gửi vào OA Manager
-
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-
-  @@index([userId])
-  @@index([status])
-  @@index([confirmedDate])
+  HA_TANG
+  VE_SINH
+  TRAT_TU
+  AN_NINH
+  KHAC
 }
 
 enum BookingStatus {
-  PENDING       // Chờ xác nhận
-  CONFIRMED     // Đã xác nhận
-  REJECTED      // Từ chối
-  RESCHEDULED   // Đã dời lịch
-  COMPLETED     // Đã hoàn thành
-  CANCELLED     // Người dân hủy
+  PENDING
+  CONFIRMED
+  REJECTED
+  RESCHEDULED
+  COMPLETED
+  CANCELLED
 }
 
 enum BookingField {
-  HO_TICH       // Hộ tịch
-  CU_TRU        // Cư trú
-  CHUNG_THUC    // Chứng thực
-  DAT_DAI       // Đất đai – Xây dựng
-  XA_HOI        // Chính sách xã hội
-  KHAC          // Vấn đề khác
-}
-
-// =============================================
-// MODEL: Rating – Đánh giá dịch vụ công
-// =============================================
-model Rating {
-  id              String   @id @default(cuid())
-  userId          String
-  user            User     @relation(fields: [userId], references: [id])
-
-  procedure       String                // Lĩnh vực thủ tục đã sử dụng
-  attitudeScore   Int                   // 1–5: thái độ phục vụ
-  timelinessScore Int                   // 1–5: thời gian giải quyết
-  outcomeScore    Int                   // 1–5: kết quả
-  averageScore    Float                 // Tính tự động: (attitude+timeliness+outcome)/3
-  comment         String?  @db.Text
-
-  // Flag: đã gửi cảnh báo vào OA Manager chưa (cho rating thấp)
-  alertSent       Boolean  @default(false)
-
-  createdAt       DateTime @default(now())
-
-  @@index([userId])
-  @@index([createdAt])
+  HO_TICH
+  CU_TRU
+  CHUNG_THUC
+  DAT_DAI
+  XA_HOI
+  KHAC
 }
