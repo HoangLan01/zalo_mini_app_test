@@ -41,13 +41,13 @@ const HeritageDetailPage: React.FC = () => {
           </Text>
           
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginBottom: '24px', paddingBottom: '20px', borderBottom: '1px solid #E0E0E0' }}>
-            <Icon icon="zi-location" size={20} style={{ color: '#0068FF' }} />
+            <Icon icon="zi-location" size={20} style={{ color: '#246BFD' }} />
             <Text style={{ fontSize: '15px', color: '#555555', lineHeight: '1.4' }}>
               {heritage.address}
             </Text>
           </div>
 
-          <Text style={{ fontSize: '18px', fontWeight: 700, color: '#0068FF', marginBottom: '16px' }}>
+          <Text style={{ fontSize: '18px', fontWeight: 700, color: '#246BFD', marginBottom: '16px' }}>
             Giới thiệu
           </Text>
           
@@ -58,7 +58,7 @@ const HeritageDetailPage: React.FC = () => {
 
           {heritage.gallery && heritage.gallery.length > 0 && (
             <Box style={{ marginTop: '32px' }}>
-              <Text style={{ fontSize: '18px', fontWeight: 700, color: '#0068FF', marginBottom: '16px' }}>
+              <Text style={{ fontSize: '18px', fontWeight: 700, color: '#246BFD', marginBottom: '16px' }}>
                 Thư viện ảnh
               </Text>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>

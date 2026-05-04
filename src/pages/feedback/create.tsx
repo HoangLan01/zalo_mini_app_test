@@ -77,9 +77,16 @@ const FeedbackCreatePage: React.FC = () => {
 
   return (
     <Page className="page" style={{ backgroundColor: '#F5F5F5', height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ backgroundColor: '#0068FF', color: 'white', display: 'flex', alignItems: 'center', padding: '16px', paddingTop: 'env(safe-area-inset-top, 0)' }}>
-        <Text onClick={() => navigate(-1)} style={{ cursor: 'pointer', marginRight: '16px' }}>Hủy</Text>
-        <Text style={{ fontSize: '18px', fontWeight: 600, flex: 1, textAlign: 'center' }}>Tạo phản ánh</Text>
+      <div style={{ 
+        background: 'linear-gradient(180deg, #246BFD 0%, #0052CC 100%)', 
+        color: 'white', 
+        display: 'flex', 
+        alignItems: 'center', 
+        padding: '10px 16px', 
+        paddingTop: 'calc(env(safe-area-inset-top, 0) + 10px)' 
+      }}>
+        <Text onClick={() => navigate(-1)} style={{ cursor: 'pointer', marginRight: '16px', color: 'white' }}>Hủy</Text>
+        <Text style={{ fontSize: '17px', fontWeight: 600, flex: 1, textAlign: 'center', color: 'white' }}>Tạo phản ánh</Text>
         <div style={{ width: '28px' }}></div>
       </div>
       
@@ -142,7 +149,7 @@ const FeedbackCreatePage: React.FC = () => {
             {images.length < 3 && (
               <div 
                 onClick={handlePickImages}
-                style={{ width: '80px', height: '80px', border: '1px dashed #0068FF', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0068FF' }}
+                style={{ width: '80px', height: '80px', border: '1px dashed #246BFD', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#246BFD' }}
               >
                 <Icon icon="zi-plus" />
               </div>
@@ -154,7 +161,7 @@ const FeedbackCreatePage: React.FC = () => {
         <Box style={{ marginBottom: '24px' }}>
           <Text style={{ fontWeight: 600, marginBottom: '8px', color: '#1A1A1A' }}>Vị trí</Text>
           {locationObj ? (
-            <Text style={{ color: '#0068FF' }}>📍 Đã lấy vị trí (lat: {locationObj.latitude.toFixed(4)}, lng: {locationObj.longitude.toFixed(4)})</Text>
+            <Text style={{ color: '#246BFD' }}>📍 Đã lấy vị trí (lat: {locationObj.latitude.toFixed(4)}, lng: {locationObj.longitude.toFixed(4)})</Text>
           ) : (
             <Button variant="secondary" onClick={fetchLocation} loading={loadingLocation}>
               Lấy vị trí hiện tại

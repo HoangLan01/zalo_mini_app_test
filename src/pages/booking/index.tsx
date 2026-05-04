@@ -22,8 +22,8 @@ const BookingIndexPage: React.FC = () => {
       <Box style={{ flex: 1, overflow: 'auto', paddingBottom: '80px', padding: '16px' }}>
         
         {/* Banner */}
-        <Box style={{ backgroundColor: '#E8F4FF', borderLeft: '4px solid #0068FF', padding: '16px', borderRadius: '8px', marginBottom: '24px' }}>
-          <Text style={{ fontSize: '14px', fontWeight: 600, color: '#0068FF', marginBottom: '4px' }}>Giờ tiếp dân:</Text>
+        <Box style={{ backgroundColor: '#E8F4FF', borderLeft: '4px solid #246BFD', padding: '16px', borderRadius: '8px', marginBottom: '24px' }}>
+          <Text style={{ fontSize: '14px', fontWeight: 600, color: '#246BFD', marginBottom: '4px' }}>Giờ tiếp dân:</Text>
           <Text style={{ fontSize: '14px', color: '#1A1A1A', lineHeight: '1.6' }}>Thứ 2 – Thứ 6: 8:00 – 11:30 và 13:30 – 17:00</Text>
         </Box>
 

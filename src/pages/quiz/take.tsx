@@ -130,7 +130,7 @@ const QuizTakePage: React.FC = () => {
           </div>
         </div>
         <div style={{ height: '6px', backgroundColor: '#E5E7EB', borderRadius: '3px', overflow: 'hidden' }}>
-          <div style={{ height: '100%', backgroundColor: '#0068FF', width: `${progressPercent}%`, transition: 'width 0.3s ease' }} />
+          <div style={{ height: '100%', backgroundColor: '#246BFD', width: `${progressPercent}%`, transition: 'width 0.3s ease' }} />
         </div>
       </Box>
 
@@ -154,7 +154,7 @@ const QuizTakePage: React.FC = () => {
                   alignItems: 'center',
                   padding: '16px',
                   backgroundColor: isSelected ? '#EFF6FF' : '#FFFFFF',
-                  border: isSelected ? '2px solid #0068FF' : '1px solid #D1D5DB',
+                  border: isSelected ? '2px solid #246BFD' : '1px solid #D1D5DB',
                   borderRadius: '12px',
                   gap: '12px',
                   transition: 'all 0.2s ease'
@@ -163,7 +163,7 @@ const QuizTakePage: React.FC = () => {
                 <div style={{
                   width: '28px', height: '28px', borderRadius: '50%',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  backgroundColor: isSelected ? '#0068FF' : '#F3F4F6',
+                  backgroundColor: isSelected ? '#246BFD' : '#F3F4F6',
                   color: isSelected ? '#FFFFFF' : '#4B5563',
                   fontWeight: 600, fontSize: '14px', flexShrink: 0
                 }}>
@@ -189,7 +189,7 @@ const QuizTakePage: React.FC = () => {
           Quay lại
         </Button>
         <Button 
-          style={{ flex: 2, backgroundColor: '#0068FF' }} 
+          style={{ flex: 2, backgroundColor: '#246BFD' }} 
           onClick={handleNext}
         >
           {currentQuestionIndex === quiz.questions.length - 1 ? 'Nộp bài' : 'Câu tiếp theo'}

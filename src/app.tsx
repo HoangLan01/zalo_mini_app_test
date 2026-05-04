@@ -11,6 +11,7 @@ import QuizResultPage from '@/pages/quiz/result';
 import DvcPage from '@/pages/dvc/index';
 import IhanoiPage from '@/pages/ihanoi/index';
 import VneidPage from '@/pages/vneid/index';
+import TtdtPage from '@/pages/ttdt/index';
 import NewsIndexPage from '@/pages/news/index';
 import NewsDetailPage from '@/pages/news/detail';
 import FeedbackIndexPage from '@/pages/feedback/index';
@@ -55,6 +56,7 @@ const MyApp: React.FC = () => {
             <Route path="/dvc" element={<DvcPage />} />
             <Route path="/ihanoi" element={<IhanoiPage />} />
             <Route path="/vneid" element={<VneidPage />} />
+            <Route path="/ttdt" element={<TtdtPage />} />
             {/* We'll add remaining routes later */}
             <Route path="*" element={<ComingSoon title="Đang phát triển" />} />
           </AnimationRoutes>

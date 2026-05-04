@@ -15,12 +15,19 @@ const FeedbackIndexPage: React.FC = () => {
 
   return (
     <Page className="page" style={{ backgroundColor: '#F5F5F5', height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ backgroundColor: '#0068FF', color: 'white', display: 'flex', alignItems: 'center', padding: '16px', paddingTop: 'env(safe-area-inset-top, 0)' }}>
-        <div onClick={() => navigate(-1)} style={{ marginRight: '16px', cursor: 'pointer' }}>
+      <div style={{ 
+        background: 'linear-gradient(180deg, #246BFD 0%, #0052CC 100%)', 
+        color: 'white', 
+        display: 'flex', 
+        alignItems: 'center', 
+        padding: '12px 16px', 
+        paddingTop: 'calc(env(safe-area-inset-top, 0) + 12px)'
+      }}>
+        <div onClick={() => navigate(-1)} style={{ marginRight: '16px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
           <Icon icon="zi-arrow-left" />
         </div>
         <Text style={{ fontSize: '18px', fontWeight: 600, flex: 1 }}>Phản ánh hiện trường</Text>
-        <div onClick={() => navigate('/feedback-create')} style={{ cursor: 'pointer' }}>
+        <div onClick={() => navigate('/feedback-create')} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
           <Icon icon="zi-plus" />
         </div>
       </div>

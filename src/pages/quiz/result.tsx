@@ -58,7 +58,7 @@ const QuizResultPage: React.FC = () => {
       <Box style={{ flex: 1, overflow: 'auto', paddingBottom: '80px' }}>
         {/* Score Banner */}
         <Box style={{ 
-          backgroundColor: isPerfect ? '#10B981' : '#0068FF', 
+          backgroundColor: isPerfect ? '#10B981' : '#246BFD', 
           padding: '32px 20px', 
           color: '#FFF',
           textAlign: 'center',

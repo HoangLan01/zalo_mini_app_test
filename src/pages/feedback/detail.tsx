@@ -8,7 +8,7 @@ const FeedbackDetailPage: React.FC = () => {
     title: 'Hệ thống đèn đường ngõ 12 bị hỏng',
     status: 'processing',
     statusText: 'Đang xử lý',
-    statusColor: '#0068FF',
+    statusColor: '#246BFD',
     category: 'Hạ tầng - Đường sá',
     date: '20/04/2026 14:30',
     desc: 'Từ hôm qua, toàn bộ bóng đèn đường đoạn từ đầu ngõ 12 đến nhà số 45 đều không sáng. Đường rất tối và nguy hiểm cho người tham gia giao thông. Đề nghị cơ quan chức năng kiểm tra và khắc phục sớm.',
@@ -64,7 +64,7 @@ const FeedbackDetailPage: React.FC = () => {
         <Text style={{ fontSize: '16px', fontWeight: 700, color: '#1A1A1A', marginBottom: '12px', marginLeft: '4px' }}>
           Phản hồi từ phường
         </Text>
-        <Box style={{ backgroundColor: '#E8F4FF', borderLeft: '4px solid #0068FF', padding: '16px', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+        <Box style={{ backgroundColor: '#E8F4FF', borderLeft: '4px solid #246BFD', padding: '16px', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
           <Text style={{ fontSize: '14px', color: '#1A1A1A', lineHeight: '1.6', marginBottom: '8px' }}>
             {feedback.response.content}
           </Text>

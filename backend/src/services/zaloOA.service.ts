@@ -11,37 +11,49 @@ let cachedAccessToken: string | null = null;
 export const getOAToken = async (): Promise<string> => {
   try {
     let tokenRecord = await prisma.oAToken.findUnique({ where: { id: 'default' } });
+    const envToken = process.env.ZALO_OA_ACCESS_TOKEN;
+    const envRefresh = process.env.ZALO_OA_REFRESH_KEY;
 
-    if (!tokenRecord) {
-      // Tự động nạp từ .env nếu bảng trống (Auto-seed)
-      const envToken = process.env.ZALO_OA_ACCESS_TOKEN;
-      const envRefresh = process.env.ZALO_OA_REFRESH_KEY;
+    // 1. Đồng bộ từ .env nếu có thay đổi thủ công (Mồi lại token)
+    if (envToken && envRefresh) {
+      const isNewToken = !tokenRecord || (tokenRecord.accessToken !== envToken && envRefresh !== tokenRecord.refreshToken);
       
-      if (envToken && envRefresh) {
-        logger.info('Auto-seeding OAToken from .env...');
-        tokenRecord = await prisma.oAToken.create({
-          data: {
+      if (isNewToken) {
+        logger.info(tokenRecord ? 'Manual token override detected in .env. Updating DB...' : 'Auto-seeding OAToken from .env...');
+        tokenRecord = await prisma.oAToken.upsert({
+          where: { id: 'default' },
+          update: {
+            accessToken: envToken,
+            refreshToken: envRefresh,
+            expiresAt: new Date(Date.now() + 25 * 60 * 60 * 1000)
+          },
+          create: {
             id: 'default',
             accessToken: envToken,
             refreshToken: envRefresh,
-            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // Tạm tính 24h
+            expiresAt: new Date(Date.now() + 25 * 60 * 60 * 1000)
           }
         });
-      } else {
-        logger.warn('No OAToken found in DB and no valid .env fallback.');
-        return envToken || '';
       }
     }
 
-    // Nếu sắp hết hạn (trước 10 phút), làm mới
-    if (tokenRecord.expiresAt.getTime() - Date.now() < 10 * 60 * 1000) {
-      return await refreshOAToken(tokenRecord.refreshToken);
+    if (!tokenRecord) {
+      logger.warn('No OAToken found in DB and no valid .env fallback.');
+      return envToken || '';
     }
 
-    cachedAccessToken = tokenRecord.accessToken;
+    // 2. Kiểm tra hạn sử dụng. Nếu sắp hết hạn (còn dưới 10 phút), làm mới.
+    if (tokenRecord.expiresAt.getTime() - Date.now() < 10 * 60 * 1000) {
+      logger.info('OA Access Token is expiring soon. Attempting automatic refresh...');
+      const newToken = await refreshOAToken(tokenRecord.refreshToken);
+      if (newToken) return newToken;
+      
+      logger.error('Automatic refresh failed. Please check if ZALO_OA_REFRESH_KEY in .env is valid or update it manually.');
+    }
+
     return tokenRecord.accessToken;
   } catch (error) {
-    logger.error('Error getting OA token from DB:', error);
+    logger.error('Error getting OA token:', error);
     return process.env.ZALO_OA_ACCESS_TOKEN || '';
   }
 };
@@ -70,36 +82,31 @@ export const refreshOAToken = async (refreshToken: string): Promise<string> => {
       }
     );
 
-    const { access_token, refresh_token, expires_in } = response.data;
+    const { access_token, refresh_token, expires_in, error, error_description } = response.data;
     
-    if (!access_token || !refresh_token) {
-      throw new Error(`Failed to refresh token: ${JSON.stringify(response.data)}`);
+    if (error || !access_token || !refresh_token) {
+      const errMsg = error_description || response.data.message || 'Unknown error';
+      throw new Error(`Zalo API Refresh Error: ${errMsg} (code: ${error})`);
     }
 
     const expiresAt = new Date(Date.now() + parseInt(expires_in) * 1000);
     
-    await prisma.oAToken.upsert({
+    await prisma.oAToken.update({
       where: { id: 'default' },
-      update: {
-        accessToken: access_token,
-        refreshToken: refresh_token,
-        expiresAt
-      },
-      create: {
-        id: 'default',
+      data: {
         accessToken: access_token,
         refreshToken: refresh_token,
         expiresAt
       }
     });
 
-    logger.info('OA Token refreshed successfully');
-    cachedAccessToken = access_token;
+    logger.info('OA Token refreshed successfully and saved to DB');
     return access_token;
 
   } catch (error: any) {
-    logger.error('Error refreshing OA token:', error.response?.data || error.message);
-    return cachedAccessToken || '';
+    const errorData = error.response?.data || error.message;
+    logger.error('Failed to refresh OA token:', typeof errorData === 'object' ? JSON.stringify(errorData) : errorData);
+    return '';
   }
 };
 
@@ -201,9 +208,9 @@ export const sendFeedbackToOA = async (feedback: Feedback, user: User): Promise<
 
 export const sendBookingToOA = async (booking: Booking, user: User): Promise<string | null> => {
   const prefDate = booking.preferredDate.toISOString().split('T')[0].split('-').reverse().join('/');
-  
-  const textContent = 
-`📅 YÊU CẦU ĐẶT LỊCH MỚI
+
+  const textContent =
+    `📅 YÊU CẦU ĐẶT LỊCH MỚI
 Mã: ${booking.code}
 👤 Người đặt: ${user.displayName}
 🗂️ Lĩnh vực: ${getFieldLabel(booking.field)}
@@ -232,8 +239,8 @@ export const sendLowRatingAlert = async (rating: Rating, user: User): Promise<vo
     return;
   }
 
-  const textContent = 
-`⚠️ ĐÁNH GIÁ THẤP
+  const textContent =
+    `⚠️ ĐÁNH GIÁ THẤP
 Mức độ hài lòng: ${rating.averageScore}/5 ⭐
 Thủ tục: ${rating.procedure}
 Nhận xét: ${rating.comment || 'Không có'}`;
@@ -247,7 +254,7 @@ export const getOAArticles = async (offset: number = 0, limit: number = 10) => {
     const url = `https://openapi.zalo.me/v2.0/article/getslice?offset=${offset}&limit=${limit}&type=normal`;
     logger.info(`Fetching OA articles: ${url}`);
     logger.info(`Using access_token (first 20 chars): ${headers.access_token?.substring(0, 20)}...`);
-    
+
     const response = await axios.get(url, { headers });
     logger.info(`OA getslice raw response status: ${response.status}, data: ${JSON.stringify(response.data).substring(0, 500)}`);
     return response.data;

@@ -15,7 +15,7 @@ const HeritageIndexPage: React.FC = () => {
     <Page className="page" style={{ backgroundColor: '#F5F5F5', height: '100%', display: 'flex', flexDirection: 'column' }}>
       <PageHeader title="Di tích lịch sử" />
       
-      <Box style={{ padding: '16px', backgroundColor: '#0068FF' }}>
+      <Box style={{ padding: '16px', backgroundColor: '#246BFD' }}>
         <Input.Search 
           placeholder="Tìm kiếm tên di tích..." 
           value={search}
@@ -48,7 +48,7 @@ const HeritageIndexPage: React.FC = () => {
                   {item.name}
                 </Text>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', marginBottom: '8px' }}>
-                  <Icon icon="zi-location" size={16} style={{ color: '#0068FF', marginTop: '2px' }} />
+                  <Icon icon="zi-location" size={16} style={{ color: '#246BFD', marginTop: '2px' }} />
                   <Text style={{ fontSize: '13px', color: '#555555' }}>
                     {item.address}
                   </Text>

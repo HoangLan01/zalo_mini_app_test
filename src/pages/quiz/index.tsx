@@ -12,7 +12,7 @@ const QuizIndexPage: React.FC = () => {
     <Page className="page" style={{ backgroundColor: '#F5F5F5', height: '100%', display: 'flex', flexDirection: 'column' }}>
       <PageHeader title="Khảo sát Kiến thức" />
       
-      <Box style={{ padding: '20px', backgroundColor: '#0068FF' }}>
+      <Box style={{ padding: '20px', backgroundColor: '#246BFD' }}>
         <Text style={{ color: '#FFFFFF', fontSize: '18px', fontWeight: 700, marginBottom: '8px' }}>
           Đánh giá Năng lực Số
         </Text>
@@ -35,7 +35,7 @@ const QuizIndexPage: React.FC = () => {
                   borderRadius: '12px', 
                   padding: '16px',
                   boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
-                  borderLeft: attempt ? '4px solid #10B981' : isClosed ? '4px solid #9CA3AF' : '4px solid #0068FF'
+                  borderLeft: attempt ? '4px solid #10B981' : isClosed ? '4px solid #9CA3AF' : '4px solid #246BFD'
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
@@ -79,7 +79,7 @@ const QuizIndexPage: React.FC = () => {
                 ) : (
                   <Button 
                     fullWidth 
-                    style={{ backgroundColor: '#0068FF' }}
+                    style={{ backgroundColor: '#246BFD' }}
                     onClick={() => navigate('/quiz-take', { state: { quizId: quiz.id } })}
                   >
                     Bắt đầu làm bài

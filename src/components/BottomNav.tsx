@@ -6,7 +6,7 @@ const BottomNav = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const hiddenRoutes = ['/vneid', '/ihanoi', '/dvc', '/quiz-take'];
+  const hiddenRoutes = ['/vneid', '/ihanoi', '/dvc', '/quiz-take', '/ttdt'];
   if (hiddenRoutes.includes(location.pathname)) return null;
 
   return (
@@ -27,11 +27,13 @@ const BottomNav = () => {
           try {
             await openChat({
               type: 'oa',
-              id: import.meta.env.VITE_ZALO_OA_ID || '3699742042171241198',
+              id: import.meta.env.VITE_ZALO_OA_ID || '466824362060768554',
               message: 'Xin chào, tôi cần hỗ trợ',
             });
           } catch (error) {
-            console.log(error);
+            // Fallback cho trình duyệt Web/PC
+            const oaId = import.meta.env.VITE_ZALO_OA_ID || '466824362060768554';
+            window.open(`https://zalo.me/${oaId}`, '_blank');
           }
         }}
       />

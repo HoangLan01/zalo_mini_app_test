@@ -3,6 +3,8 @@ import { Page, Box, Text, Icon, Swiper } from 'zmp-ui';
 import { useNavigate } from 'zmp-ui';
 import { useUserStore } from '@/store/userStore';
 import { apiCall } from '@/services/api';
+import logo from '@/assets/logo.jpg';
+import bannerFit from '@/assets/banner_fit.png';
 
 
 const IndexPage: React.FC = () => {
@@ -13,8 +15,8 @@ const IndexPage: React.FC = () => {
   useEffect(() => {
     // Mock fetching banners
     setBanners([
-      { id: 1, img: 'https://images.unsplash.com/photo-1546422904-90eab23c3d7e?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80' },
-      { id: 2, img: 'https://images.unsplash.com/photo-1506748686214-e9df14d4d9d0?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80' }
+      { id: 1, img: bannerFit },
+      { id: 2, img: 'https://images.unsplash.com/photo-1546422904-90eab23c3d7e?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80' }
     ]);
   }, []);
 
@@ -29,6 +31,7 @@ const IndexPage: React.FC = () => {
 
   const otherServices = [
     { title: 'Tin tức', icon: '📰', path: '/news' },
+    { title: 'Trang TTĐT', icon: '🌐', path: '/ttdt' },
     { title: 'Sự kiện', icon: '🎉', path: '/events' },
     { title: 'Di tích', icon: '🏛️', path: '/heritage' },
     { title: 'Kiến thức CĐS', icon: '💡', path: '/quiz' },
@@ -56,14 +59,20 @@ const IndexPage: React.FC = () => {
   return (
     <Page className="page" style={{ paddingBottom: '80px', backgroundColor: '#F5F5F5' }}>
       {/* 1. Header Bar */}
-      <Box style={{ backgroundColor: '#0068FF', padding: '16px 16px 24px 16px', borderBottomLeftRadius: '24px', borderBottomRightRadius: '24px' }}>
+      <Box style={{ 
+        background: 'linear-gradient(180deg, #246BFD 0%, #0052CC 100%)', 
+        padding: '10px 16px 18px 16px', 
+        paddingTop: 'calc(env(safe-area-inset-top, 0) + 10px)',
+        borderBottomLeftRadius: '24px', 
+        borderBottomRightRadius: '24px' 
+      }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div style={{ width: '40px', height: '40px', backgroundColor: '#FFF', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-            <span style={{ fontSize: '20px' }}>🏛️</span>
+            <img src={logo} alt="logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           </div>
           <Text style={{ color: '#FFF', fontWeight: 600, fontSize: '18px' }}>UBND Phường Tùng Thiện</Text>
         </div>
-        
+
         {/* 2. Greeting Card */}
         <Box style={{ marginTop: '24px', backgroundColor: '#FFFFFF', padding: '16px', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
           <div>
@@ -76,7 +85,7 @@ const IndexPage: React.FC = () => {
             <img src={userInfo.avatar} alt="avatar" style={{ width: '48px', height: '48px', borderRadius: '50%', objectFit: 'cover' }} />
           ) : (
             <div style={{ width: '48px', height: '48px', borderRadius: '50%', backgroundColor: '#E8F0FE', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Icon icon="zi-user" style={{ color: '#0068FF' }} />
+              <Icon icon="zi-user" style={{ color: '#246BFD' }} />
             </div>
           )}
         </Box>
@@ -85,10 +94,14 @@ const IndexPage: React.FC = () => {
       {/* 3. Banner Swiper */}
       <Box style={{ padding: '0 16px', marginTop: '-12px' }}>
         {banners.length > 0 && (
-          <Swiper autoplay duration={3000} loop style={{ borderRadius: '12px', overflow: 'hidden', height: '160px' }}>
+          <Swiper autoplay duration={3000} loop style={{ borderRadius: '12px', overflow: 'hidden', height: '180px' }}>
             {banners.map((banner) => (
               <Swiper.Slide key={banner.id}>
-                <img src={banner.img} alt="Banner" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <img 
+                  src={banner.img} 
+                  alt="Banner" 
+                  style={{ width: '100%', height: '180px', objectFit: 'cover', display: 'block' }} 
+                />
               </Swiper.Slide>
             ))}
           </Swiper>

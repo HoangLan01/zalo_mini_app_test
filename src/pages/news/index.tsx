@@ -82,7 +82,7 @@ const NewsIndexPage: React.FC = () => {
                     <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <Text style={{ fontSize: '12px', color: '#888888' }}>{formatDate(item.publishedAt)}</Text>
                       <div style={{ backgroundColor: '#E8F0FE', padding: '2px 8px', borderRadius: '12px' }}>
-                        <Text style={{ fontSize: '12px', color: '#0068FF' }}>{item.category}</Text>
+                        <Text style={{ fontSize: '12px', color: '#246BFD' }}>{item.category}</Text>
                       </div>
                     </div>
                   </div>

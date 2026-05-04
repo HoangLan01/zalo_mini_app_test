@@ -42,9 +42,16 @@ const BookingCreatePage: React.FC = () => {
 
   return (
     <Page className="page" style={{ backgroundColor: '#F5F5F5', height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ backgroundColor: '#0068FF', color: 'white', display: 'flex', alignItems: 'center', padding: '16px', paddingTop: 'env(safe-area-inset-top, 0)' }}>
-        <Text onClick={() => navigate(-1)} style={{ cursor: 'pointer', marginRight: '16px' }}>Hủy</Text>
-        <Text style={{ fontSize: '18px', fontWeight: 600, flex: 1, textAlign: 'center' }}>Đặt lịch mới</Text>
+      <div style={{ 
+        background: 'linear-gradient(180deg, #246BFD 0%, #0052CC 100%)', 
+        color: 'white', 
+        display: 'flex', 
+        alignItems: 'center', 
+        padding: '10px 16px', 
+        paddingTop: 'calc(env(safe-area-inset-top, 0) + 10px)' 
+      }}>
+        <Text onClick={() => navigate(-1)} style={{ cursor: 'pointer', marginRight: '16px', color: 'white' }}>Hủy</Text>
+        <Text style={{ fontSize: '17px', fontWeight: 600, flex: 1, textAlign: 'center', color: 'white' }}>Đặt lịch mới</Text>
         <div style={{ width: '28px' }}></div>
       </div>
       
