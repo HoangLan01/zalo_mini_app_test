@@ -17,7 +17,7 @@ export const getOAToken = async (): Promise<string> => {
     // 1. Đồng bộ từ .env nếu có thay đổi thủ công (Mồi lại token)
     if (envToken && envRefresh) {
       const isNewToken = !tokenRecord || (tokenRecord.accessToken !== envToken && envRefresh !== tokenRecord.refreshToken);
-      
+
       if (isNewToken) {
         logger.info(tokenRecord ? 'Manual token override detected in .env. Updating DB...' : 'Auto-seeding OAToken from .env...');
         tokenRecord = await prisma.oAToken.upsert({
@@ -47,7 +47,7 @@ export const getOAToken = async (): Promise<string> => {
       logger.info('OA Access Token is expiring soon. Attempting automatic refresh...');
       const newToken = await refreshOAToken(tokenRecord.refreshToken);
       if (newToken) return newToken;
-      
+
       logger.error('Automatic refresh failed. Please check if ZALO_OA_REFRESH_KEY in .env is valid or update it manually.');
     }
 
@@ -83,14 +83,14 @@ export const refreshOAToken = async (refreshToken: string): Promise<string> => {
     );
 
     const { access_token, refresh_token, expires_in, error, error_description } = response.data;
-    
+
     if (error || !access_token || !refresh_token) {
       const errMsg = error_description || response.data.message || 'Unknown error';
       throw new Error(`Zalo API Refresh Error: ${errMsg} (code: ${error})`);
     }
 
     const expiresAt = new Date(Date.now() + parseInt(expires_in) * 1000);
-    
+
     await prisma.oAToken.update({
       where: { id: 'default' },
       data: {

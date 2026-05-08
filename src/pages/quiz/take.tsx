@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Page, Box, Text, Button, Icon, useNavigate, useSnackbar, Modal } from 'zmp-ui';
+import { Page, Box, Text, Button, useNavigate, useSnackbar, Modal } from 'zmp-ui';
 import { useLocation } from 'react-router-dom';
 import PageHeader from '@/components/PageHeader';
 import { useQuizStore, Question } from '@/store/quizStore';
@@ -123,7 +123,9 @@ const QuizTakePage: React.FC = () => {
             Câu {currentQuestionIndex + 1}/{quiz.questions.length}
           </Text>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: timeLeft < 60 ? '#FEE2E2' : '#F3F4F6', padding: '4px 12px', borderRadius: '16px' }}>
-            <Icon icon="zi-clock-1" size={16} style={{ color: timeLeft < 60 ? '#EF4444' : '#4B5563' }} />
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={timeLeft < 60 ? '#EF4444' : '#4B5563'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+            </svg>
             <Text style={{ fontSize: '14px', fontWeight: 700, color: timeLeft < 60 ? '#EF4444' : '#4B5563', fontVariantNumeric: 'tabular-nums' }}>
               {formatTime(timeLeft)}
             </Text>

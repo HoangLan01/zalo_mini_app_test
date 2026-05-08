@@ -46,10 +46,14 @@ const NewsDetailPage: React.FC = () => {
 
   if (loading) {
     return (
-      <Page className="page">
+      <Page className="page" style={{ backgroundColor: 'var(--surface)' }}>
         <PageHeader title="Chi tiết tin tức" />
-        <Box flex justifyContent="center" alignItems="center" style={{ height: '200px' }}>
-          <Spinner />
+        <Box style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div className="skeleton" style={{ width: '100%', height: '220px', borderRadius: 'var(--radius-xl)' }} />
+          <div className="skeleton skeleton-title" style={{ width: '80%' }} />
+          <div className="skeleton skeleton-text" style={{ width: '60%' }} />
+          <div className="skeleton skeleton-text" style={{ width: '90%' }} />
+          <div className="skeleton skeleton-text" style={{ width: '75%' }} />
         </Box>
       </Page>
     );
@@ -57,48 +61,86 @@ const NewsDetailPage: React.FC = () => {
 
   if (!article) {
     return (
-      <Page className="page">
+      <Page className="page" style={{ backgroundColor: 'var(--surface)' }}>
         <PageHeader title="Chi tiết tin tức" />
-        <Box style={{ padding: '20px' }}>
-          <Text>Không tìm thấy nội dung bài viết.</Text>
+        <Box style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '60px 20px' }}>
+          <div className="animate-float" style={{ fontSize: '48px', marginBottom: '16px', opacity: 0.4 }}>📄</div>
+          <Text style={{ color: 'var(--text-muted)' }}>Không tìm thấy nội dung bài viết.</Text>
         </Box>
       </Page>
     );
   }
 
   return (
-    <Page className="page" style={{ backgroundColor: '#FFFFFF', height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <Page className="page" style={{ backgroundColor: 'var(--surface-raised)', height: '100%', display: 'flex', flexDirection: 'column' }}>
       <PageHeader title="Chi tiết tin tức" />
-      <Box style={{ flex: 1, overflow: 'auto', paddingBottom: '80px' }}>
-        <img 
-          src={article.thumbnailUrl || "https://images.unsplash.com/photo-1546422904-90eab23c3d7e?w=800"} 
-          alt={article.title} 
-          style={{ width: '100%', aspectRatio: '16/9', objectFit: 'cover' }} 
-        />
-        <Box style={{ padding: '20px' }}>
-          <Text style={{ fontSize: '18px', fontWeight: 700, color: '#1A1A1A', marginBottom: '8px' }}>
+      <Box style={{ flex: 1, overflow: 'auto', paddingBottom: '160px' }}>
+        {/* Hero Image */}
+        <div className="animate-fade-in" style={{ position: 'relative' }}>
+          <img
+            src={article.thumbnailUrl || "https://images.unsplash.com/photo-1546422904-90eab23c3d7e?w=800"}
+            alt={article.title}
+            style={{ width: '100%', aspectRatio: '16/9', objectFit: 'cover' }}
+          />
+          <div style={{
+            position: 'absolute', bottom: 0, left: 0, right: 0, height: '80px',
+            background: 'linear-gradient(to top, var(--surface-raised), transparent)'
+          }} />
+        </div>
+
+        {/* Content */}
+        <Box className="animate-fade-in-up delay-100" style={{ padding: '0 20px', marginTop: '-20px', position: 'relative', zIndex: 1 }}>
+          {/* Category Badge */}
+          <div className="badge badge-primary" style={{ marginBottom: '12px' }}>
+            {article.category}
+          </div>
+
+          {/* Title */}
+          <Text style={{
+            fontSize: '20px', fontWeight: 800, color: 'var(--text-primary)',
+            marginBottom: '12px', lineHeight: '1.4', letterSpacing: '-0.02em'
+          }}>
             {article.title}
           </Text>
-          <Text style={{ fontSize: '12px', color: '#888888', marginBottom: '16px' }}>
-            {formatDate(article.publishedAt)} • {article.category} {article.author ? `• By ${article.author}` : ''}
-          </Text>
-          <div style={{ height: '1px', backgroundColor: '#E0E0E0', marginBottom: '16px' }} />
-          
-          <div 
-            style={{ color: '#333333', lineHeight: '1.6', fontSize: '15px' }} 
-            dangerouslySetInnerHTML={{ __html: article.content }} 
-          />
-          
-          <Button 
-            variant="secondary" 
-            fullWidth 
-            style={{ marginTop: '32px' }}
-            onClick={() => {
-              // zmp-sdk share logic would go here
+
+          {/* Meta */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px' }}>
+            <Text style={{ fontSize: '13px', color: 'var(--text-muted)' }}>📅 {formatDate(article.publishedAt)}</Text>
+            {article.author && (
+              <>
+                <div style={{ width: '3px', height: '3px', borderRadius: '50%', background: 'var(--text-muted)' }} />
+                <Text style={{ fontSize: '13px', color: 'var(--text-muted)' }}>✍️ {article.author}</Text>
+              </>
+            )}
+          </div>
+
+          {/* Divider */}
+          <div className="divider-gradient" style={{ marginBottom: '20px' }} />
+
+          {/* Article Content */}
+          <div
+            style={{
+              color: 'var(--text-secondary)', lineHeight: '1.8', fontSize: '15px',
+              textAlign: 'justify'
             }}
+            dangerouslySetInnerHTML={{ __html: article.content }}
+          />
+
+          {/* Share Button */}
+          <button
+            className="active-scale"
+            style={{
+              width: '100%', padding: '14px', marginTop: '32px',
+              borderRadius: 'var(--radius-pill)',
+              border: '2px solid var(--primary)',
+              background: 'transparent', color: 'var(--primary)',
+              fontWeight: 700, fontSize: '14px', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
+            }}
+            onClick={() => {}}
           >
-            Chia sẻ cho bạn bè
-          </Button>
+            📤 Chia sẻ cho bạn bè
+          </button>
         </Box>
       </Box>
     </Page>

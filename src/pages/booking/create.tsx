@@ -1,7 +1,24 @@
 import React, { useState } from 'react';
 import { Page, Box, Text, Select, Button, useSnackbar, DatePicker } from 'zmp-ui';
 import { useNavigate } from 'zmp-ui';
+import PageHeader from '@/components/PageHeader';
 import { useBookingStore } from '@/store/bookingStore';
+
+const timeSlots = [
+  { value: '08:00', label: '8:00', period: 'Sáng' },
+  { value: '08:30', label: '8:30', period: 'Sáng' },
+  { value: '09:00', label: '9:00', period: 'Sáng' },
+  { value: '09:30', label: '9:30', period: 'Sáng' },
+  { value: '10:00', label: '10:00', period: 'Sáng' },
+  { value: '10:30', label: '10:30', period: 'Sáng' },
+  { value: '13:30', label: '13:30', period: 'Chiều' },
+  { value: '14:00', label: '14:00', period: 'Chiều' },
+  { value: '14:30', label: '14:30', period: 'Chiều' },
+  { value: '15:00', label: '15:00', period: 'Chiều' },
+  { value: '15:30', label: '15:30', period: 'Chiều' },
+  { value: '16:00', label: '16:00', period: 'Chiều' },
+  { value: '16:30', label: '16:30', period: 'Chiều' },
+];
 
 const BookingCreatePage: React.FC = () => {
   const navigate = useNavigate();
@@ -40,85 +57,135 @@ const BookingCreatePage: React.FC = () => {
     }, 1500);
   };
 
+  const morningSlots = timeSlots.filter(s => s.period === 'Sáng');
+  const afternoonSlots = timeSlots.filter(s => s.period === 'Chiều');
+
   return (
-    <Page className="page" style={{ backgroundColor: '#F5F5F5', height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ 
-        background: 'linear-gradient(180deg, #246BFD 0%, #0052CC 100%)', 
-        color: 'white', 
-        display: 'flex', 
-        alignItems: 'center', 
-        padding: '10px 16px', 
-        paddingTop: 'calc(env(safe-area-inset-top, 0) + 10px)' 
-      }}>
-        <Text onClick={() => navigate(-1)} style={{ cursor: 'pointer', marginRight: '16px', color: 'white' }}>Hủy</Text>
-        <Text style={{ fontSize: '17px', fontWeight: 600, flex: 1, textAlign: 'center', color: 'white' }}>Đặt lịch mới</Text>
-        <div style={{ width: '28px' }}></div>
-      </div>
-      
-      <Box style={{ flex: 1, overflow: 'auto', padding: '16px', backgroundColor: '#FFFFFF' }}>
+    <Page className="page" style={{ backgroundColor: 'var(--surface)', height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <PageHeader title="Đặt lịch mới" />
+
+      <Box style={{ flex: 1, overflow: 'auto', padding: '16px', paddingBottom: '160px', backgroundColor: 'var(--surface-raised)' }}>
         
-        {/* Lĩnh vực */}
-        <Box style={{ marginBottom: '20px' }}>
-          <Text style={{ fontWeight: 600, marginBottom: '8px', color: '#1A1A1A' }}>Lĩnh vực cần tư vấn *</Text>
+        {/* Category */}
+        <Box className="animate-fade-in-up" style={{ marginBottom: '24px' }}>
+          <Text style={{ fontWeight: 700, marginBottom: '10px', color: 'var(--text-primary)', fontSize: '15px' }}>
+            🗂️ Lĩnh vực cần tư vấn <span style={{ color: 'var(--danger)' }}>*</span>
+          </Text>
           <Select 
             placeholder="Chọn lĩnh vực" 
             value={category}
             onChange={(val) => setCategory(String(val))}
+            closeOnSelect={true}
           >
             <Select.Option value="ho-tich" title="Hộ tịch (khai sinh, khai tử...)" />
             <Select.Option value="cu-tru" title="Cư trú (đăng ký tạm trú...)" />
             <Select.Option value="chung-thuc" title="Chứng thực giấy tờ" />
             <Select.Option value="dat-dai" title="Đất đai – Xây dựng" />
-             <Select.Option value="xa-hoi" title="Chính sách xã hội" />
-             <Select.Option value="khac" title="Vấn đề khác" />
+            <Select.Option value="xa-hoi" title="Chính sách xã hội" />
+            <Select.Option value="khac" title="Vấn đề khác" />
           </Select>
         </Box>
 
-        {/* Ngày hẹn */}
-        <Box style={{ marginBottom: '20px' }}>
-          <Text style={{ fontWeight: 600, marginBottom: '8px', color: '#1A1A1A' }}>Ngày hẹn *</Text>
+        {/* Date */}
+        <Box className="animate-fade-in-up delay-50" style={{ marginBottom: '24px' }}>
+          <Text style={{ fontWeight: 700, marginBottom: '10px', color: 'var(--text-primary)', fontSize: '15px' }}>
+            📅 Ngày hẹn <span style={{ color: 'var(--danger)' }}>*</span>
+          </Text>
           <DatePicker 
             placeholder="Chọn ngày"
             value={date}
-            onChange={(val, pickey) => setDate(val as Date)}
+            onChange={(val) => setDate(val as Date)}
             mask
             maskClosable
             title="Chọn ngày"
           />
         </Box>
 
-        {/* Giờ hẹn */}
-        <Box style={{ marginBottom: '20px' }}>
-          <Text style={{ fontWeight: 600, marginBottom: '8px', color: '#1A1A1A' }}>Khung giờ mong muốn *</Text>
-          <Select 
-            placeholder="Chọn khung giờ" 
-            value={time}
-            onChange={(val) => setTime(String(val))}
-          >
-            <Select.Option value="08:00" title="8:00 – 8:30 sáng" />
-            <Select.Option value="08:30" title="8:30 – 9:00 sáng" />
-            <Select.Option value="09:00" title="9:00 – 9:30 sáng" />
-            <Select.Option value="09:30" title="9:30 – 10:00 sáng" />
-            <Select.Option value="10:00" title="10:00 – 10:30 sáng" />
-            <Select.Option value="13:30" title="13:30 – 14:00 chiều" />
-            <Select.Option value="14:00" title="14:00 – 14:30 chiều" />
-            <Select.Option value="14:30" title="14:30 – 15:00 chiều" />
-            <Select.Option value="15:00" title="15:00 – 15:30 chiều" />
-            <Select.Option value="15:30" title="15:30 – 16:00 chiều" />
-            <Select.Option value="16:00" title="16:00 – 16:30 chiều" />
-            <Select.Option value="16:30" title="16:30 – 17:00 chiều" />
-          </Select>
-          <Text style={{ fontSize: '12px', color: '#888', marginTop: '8px', fontStyle: 'italic' }}>
+        {/* Time Slots Grid */}
+        <Box className="animate-fade-in-up delay-100" style={{ marginBottom: '24px' }}>
+          <Text style={{ fontWeight: 700, marginBottom: '10px', color: 'var(--text-primary)', fontSize: '15px' }}>
+            ⏰ Khung giờ mong muốn <span style={{ color: 'var(--danger)' }}>*</span>
+          </Text>
+
+          {/* Morning */}
+          <Text style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            🌅 Buổi sáng
+          </Text>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', marginBottom: '16px' }}>
+            {morningSlots.map(slot => (
+              <div
+                key={slot.value}
+                onClick={() => setTime(slot.value)}
+                className="active-scale"
+                style={{
+                  padding: '12px 8px',
+                  borderRadius: 'var(--radius-md)',
+                  border: time === slot.value ? '2px solid var(--primary)' : '1.5px solid var(--border)',
+                  background: time === slot.value ? 'var(--primary-light)' : 'var(--surface-raised)',
+                  textAlign: 'center', cursor: 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                <Text style={{
+                  fontWeight: 700, fontSize: '14px',
+                  color: time === slot.value ? 'var(--primary)' : 'var(--text-primary)'
+                }}>
+                  {slot.label}
+                </Text>
+              </div>
+            ))}
+          </div>
+
+          {/* Afternoon */}
+          <Text style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            🌇 Buổi chiều
+          </Text>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', marginBottom: '12px' }}>
+            {afternoonSlots.map(slot => (
+              <div
+                key={slot.value}
+                onClick={() => setTime(slot.value)}
+                className="active-scale"
+                style={{
+                  padding: '12px 8px',
+                  borderRadius: 'var(--radius-md)',
+                  border: time === slot.value ? '2px solid var(--primary)' : '1.5px solid var(--border)',
+                  background: time === slot.value ? 'var(--primary-light)' : 'var(--surface-raised)',
+                  textAlign: 'center', cursor: 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                <Text style={{
+                  fontWeight: 700, fontSize: '14px',
+                  color: time === slot.value ? 'var(--primary)' : 'var(--text-primary)'
+                }}>
+                  {slot.label}
+                </Text>
+              </div>
+            ))}
+          </div>
+
+          <Text style={{ fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
             * Khung giờ hẹn chính xác sẽ được cán bộ duyệt và xác nhận qua Zalo.
           </Text>
         </Box>
-
       </Box>
 
-      <Box style={{ padding: '16px', paddingBottom: '80px', backgroundColor: '#FFFFFF', borderTop: '1px solid #E0E0E0' }}>
-        <Button fullWidth onClick={handleSubmit} loading={loading}>
-          Đặt lịch hẹn
-        </Button>
+      {/* Submit */}
+      <Box style={{ padding: '16px', paddingBottom: '80px', backgroundColor: 'var(--surface-raised)', borderTop: '1px solid var(--border-light)' }}>
+        <button
+          onClick={handleSubmit}
+          disabled={loading}
+          className="btn-gradient ripple-container"
+          style={{
+            width: '100%', padding: '14px',
+            border: 'none', borderRadius: 'var(--radius-md)',
+            fontWeight: 700, fontSize: '15px', cursor: 'pointer',
+            opacity: loading ? 0.7 : 1
+          }}
+        >
+          {loading ? '⏳ Đang xử lý...' : '📅 Đặt lịch hẹn'}
+        </button>
       </Box>
     </Page>
   );

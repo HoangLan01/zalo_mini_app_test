@@ -47,8 +47,14 @@ const MyApp: React.FC = () => {
             <Route path="/booking-create" element={<BookingCreatePage />} />
             <Route path="/heritage" element={<HeritageIndexPage />} />
             <Route path="/heritage-detail" element={<HeritageDetailPage />} />
-            <Route path="/services" element={<ComingSoon title="Dịch vụ" />} />
-            <Route path="/profile" element={<ComingSoon title="Cá nhân" />} />
+            
+            {/* Upcoming features using ComingSoon component */}
+            <Route path="/rating" element={<ComingSoon title="Đánh giá dịch vụ" />} />
+            <Route path="/events" element={<ComingSoon title="Sự kiện sắp tới" />} />
+            <Route path="/education" element={<ComingSoon title="Giáo dục & Đào tạo" />} />
+            <Route path="/planning" element={<ComingSoon title="Thông tin quy hoạch" />} />
+            <Route path="/services" element={<ComingSoon title="Dịch vụ đời sống" />} />
+            <Route path="/profile" element={<ComingSoon title="Thông tin cá nhân" />} />
 
             <Route path="/quiz" element={<QuizIndexPage />} />
             <Route path="/quiz-take" element={<QuizTakePage />} />
@@ -57,7 +63,7 @@ const MyApp: React.FC = () => {
             <Route path="/ihanoi" element={<IhanoiPage />} />
             <Route path="/vneid" element={<VneidPage />} />
             <Route path="/ttdt" element={<TtdtPage />} />
-            {/* We'll add remaining routes later */}
+            
             <Route path="*" element={<ComingSoon title="Đang phát triển" />} />
           </AnimationRoutes>
           <BottomNav />

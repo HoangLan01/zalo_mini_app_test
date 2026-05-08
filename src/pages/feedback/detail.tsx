@@ -24,52 +24,80 @@ const FeedbackDetailPage: React.FC = () => {
   };
 
   return (
-    <Page className="page" style={{ backgroundColor: '#F5F5F5', height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <Page className="page" style={{ backgroundColor: 'var(--surface)', height: '100%', display: 'flex', flexDirection: 'column' }}>
       <PageHeader title="Chi tiết phản ánh" />
-      <Box style={{ flex: 1, overflow: 'auto', padding: '16px', paddingBottom: '80px' }}>
-        <Box style={{ backgroundColor: '#FFFFFF', padding: '16px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', marginBottom: '16px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-            <div style={{ backgroundColor: `${feedback.statusColor}20`, padding: '4px 12px', borderRadius: '16px' }}>
-              <Text style={{ fontSize: '13px', fontWeight: 600, color: feedback.statusColor }}>{feedback.statusText}</Text>
+      <Box style={{ flex: 1, overflow: 'auto', padding: '16px', paddingBottom: '160px' }}>
+        {/* Main Card */}
+        <div className="card-elevated animate-fade-in-up" style={{ padding: '18px', borderRadius: 'var(--radius-xl)', marginBottom: '16px' }}>
+          {/* Status + Code */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+            <div className="badge badge-primary">
+              🔄 {feedback.statusText}
             </div>
-            <Text style={{ fontSize: '12px', color: '#888888' }}>{feedback.code}</Text>
+            <Text style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 500 }}>{feedback.code}</Text>
           </div>
-          <Text style={{ fontSize: '18px', fontWeight: 700, color: '#1A1A1A', marginBottom: '8px' }}>
+
+          {/* Title */}
+          <Text style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '8px', letterSpacing: '-0.01em', lineHeight: '1.4' }}>
             {feedback.title}
           </Text>
-          <Text style={{ fontSize: '13px', color: '#888888', marginBottom: '16px' }}>
-            {feedback.category} • {feedback.date}
-          </Text>
-          <div style={{ height: '1px', backgroundColor: '#E0E0E0', marginBottom: '16px' }} />
           
-          <Text style={{ fontSize: '15px', color: '#333', lineHeight: '1.6', marginBottom: '16px' }}>
+          {/* Meta */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+            <Text style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{feedback.category}</Text>
+            <div style={{ width: '3px', height: '3px', borderRadius: '50%', background: 'var(--text-muted)' }} />
+            <Text style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{feedback.date}</Text>
+          </div>
+
+          {/* Divider */}
+          <div className="divider-gradient" style={{ marginBottom: '16px' }} />
+
+          {/* Description */}
+          <Text style={{ fontSize: '15px', color: 'var(--text-secondary)', lineHeight: '1.7', marginBottom: '16px' }}>
             {feedback.desc}
           </Text>
 
+          {/* Images */}
           {feedback.images.length > 0 && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', marginBottom: '16px' }}>
-               {feedback.images.map((img, idx) => (
-                 <img key={idx} src={img} alt="Đính kèm" style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', borderRadius: '8px' }} />
-               ))}
+              {feedback.images.map((img, idx) => (
+                <img key={idx} src={img} alt="Đính kèm" style={{
+                  width: '100%', aspectRatio: '1', objectFit: 'cover',
+                  borderRadius: 'var(--radius-md)'
+                }} />
+              ))}
             </div>
           )}
 
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-            <span style={{ fontSize: '16px' }}>📍</span>
-            <Text style={{ fontSize: '14px', color: '#1A1A1A' }}>{feedback.address}</Text>
+          {/* Location */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: '8px',
+            padding: '12px', borderRadius: 'var(--radius-md)',
+            background: 'var(--primary-light)'
+          }}>
+            <Text style={{ fontSize: '16px' }}>📍</Text>
+            <Text style={{ fontSize: '14px', color: 'var(--primary)', fontWeight: 500 }}>{feedback.address}</Text>
           </div>
-        </Box>
+        </div>
 
-        {/* Response */}
-        <Text style={{ fontSize: '16px', fontWeight: 700, color: '#1A1A1A', marginBottom: '12px', marginLeft: '4px' }}>
+        {/* Response Section */}
+        <Text className="section-title animate-fade-in-up delay-100" style={{ marginBottom: '12px', marginLeft: '4px' }}>
           Phản hồi từ phường
         </Text>
-        <Box style={{ backgroundColor: '#E8F4FF', borderLeft: '4px solid #246BFD', padding: '16px', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-          <Text style={{ fontSize: '14px', color: '#1A1A1A', lineHeight: '1.6', marginBottom: '8px' }}>
+        <div className="animate-fade-in-up delay-150" style={{
+          background: 'linear-gradient(135deg, #EEF4FF 0%, #F0F4FF 100%)',
+          borderLeft: '4px solid var(--primary)',
+          padding: '16px', borderRadius: 'var(--radius-md)',
+          boxShadow: 'var(--shadow-sm)'
+        }}>
+          <Text style={{ fontSize: '14px', color: 'var(--text-primary)', lineHeight: '1.7', marginBottom: '10px' }}>
             {feedback.response.content}
           </Text>
-          <Text style={{ fontSize: '12px', color: '#888888' }}>Phản hồi lúc: {feedback.response.date}</Text>
-        </Box>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--primary)' }} />
+            <Text style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Phản hồi lúc: {feedback.response.date}</Text>
+          </div>
+        </div>
       </Box>
     </Page>
   );

@@ -1,10 +1,10 @@
 {
   "app": {
     "title": "Phường Tùng Thiện",
-    "statusBarColor": "#0068FF",
-    "actionBarColor": "#0068FF",
+    "statusBarColor": "#246BFD",
+    "actionBarColor": "#246BFD",
     "textColor": "#FFFFFF",
-    "hideActionBar": false
+    "hideActionBar": true
   },
   "pages": [
     "pages/index/index",

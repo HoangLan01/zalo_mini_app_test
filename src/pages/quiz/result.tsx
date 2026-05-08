@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Page, Box, Text, Button, Icon, useNavigate } from 'zmp-ui';
+import { Page, Box, Text, Button, useNavigate } from 'zmp-ui';
 import { useLocation } from 'react-router-dom';
 import PageHeader from '@/components/PageHeader';
 import { useQuizStore } from '@/store/quizStore';
@@ -68,7 +68,15 @@ const QuizResultPage: React.FC = () => {
             width: '80px', height: '80px', borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.2)',
             display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px'
           }}>
-            <Icon icon={isPerfect ? "zi-star-solid" : "zi-check"} size={40} />
+            {isPerfect ? (
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="white" stroke="white" strokeWidth="1">
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+              </svg>
+            ) : (
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+            )}
           </div>
           <Text style={{ fontSize: '16px', opacity: 0.9 }}>Điểm số của bạn</Text>
           <Text style={{ fontSize: '48px', fontWeight: 800, lineHeight: '1.2' }}>{attempt.score}<span style={{ fontSize: '24px', opacity: 0.8 }}>/{maxScore}</span></Text>
