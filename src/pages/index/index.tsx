@@ -99,7 +99,7 @@ const IndexPage: React.FC = () => {
       {/* ===== HERO BANNER ===== */}
       <Box style={{ position: 'relative', height: '320px' }}>
         {banners.length > 0 && (
-          <Swiper autoplay duration={4000} loop style={{ height: '320px', width: '100%' }}>
+          <Swiper autoplay duration={4000} loop style={{ height: '320px', width: '100%', borderRadius: '0px', overflow: 'hidden' }}>
             {banners.map((banner) => (
               <Swiper.Slide key={banner.id}>
                 <div style={{ position: 'relative', width: '100%', height: '100%' }}>
