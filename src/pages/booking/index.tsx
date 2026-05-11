@@ -25,9 +25,9 @@ const BookingIndexPage: React.FC = () => {
   };
 
   return (
-    <Page className="page" style={{ backgroundColor: 'var(--surface)', height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <Page className="page" style={{ backgroundColor: 'var(--surface)', paddingBottom: '80px' }}>
       <PageHeader title="Đặt lịch tiếp dân" />
-      <Box style={{ flex: 1, overflow: 'auto', paddingBottom: '160px', padding: '16px' }}>
+      <Box style={{ padding: '16px', paddingBottom: '160px' }}>
         
         {/* Info Banner — Gradient */}
         <div className="animate-fade-in-up" style={{

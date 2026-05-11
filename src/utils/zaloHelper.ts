@@ -33,7 +33,7 @@ export async function requestPhoneNumber(): Promise<string | null> {
 export function openExternalUrl(url: string, title?: string) {
   try {
     // Gọi Zalo SDK Webview
-    openWebview({ url });
+    openWebview({ url, config: { style: 'normal' } });
     
     // Dự phòng cho môi trường localhost/Web giả lập:
     // Vì openWebview không hoạt động trên web PC, nên mở thêm window.open

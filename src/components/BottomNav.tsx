@@ -43,12 +43,12 @@ const BottomNav = () => {
           try {
             await openChat({
               type: 'oa',
-              id: import.meta.env.VITE_ZALO_OA_ID || '466824362060768554',
+              id: import.meta.env.VITE_ZALO_OA_ID,
               message: 'Xin chào, tôi cần hỗ trợ',
             });
           } catch (error) {
             // Fallback cho trình duyệt Web/PC
-            const oaId = import.meta.env.VITE_ZALO_OA_ID || '466824362060768554';
+            const oaId = import.meta.env.VITE_ZALO_OA_ID;
             window.open(`https://zalo.me/${oaId}`, '_blank');
           }
         }}

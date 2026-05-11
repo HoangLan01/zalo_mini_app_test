@@ -3,6 +3,7 @@ import { Page, Box, Text, Swiper } from 'zmp-ui';
 import { useNavigate } from 'zmp-ui';
 import { useUserStore } from '@/store/userStore';
 import { apiCall } from '@/services/api';
+import { openChat } from 'zmp-sdk/apis';
 import logo from '@/assets/logo.jpg';
 import bannerFit from '@/assets/banner_fit.png';
 
@@ -54,10 +55,24 @@ const IndexPage: React.FC = () => {
     ]);
   }, []);
 
+  const handleOpenChat = async () => {
+    try {
+      await openChat({
+        type: 'oa',
+        id: import.meta.env.VITE_ZALO_OA_ID,
+        message: 'Xin chào, tôi cần hỗ trợ',
+      });
+    } catch (error) {
+      // Fallback cho trình duyệt Web/PC
+      const oaId = import.meta.env.VITE_ZALO_OA_ID;
+      window.open(`https://zalo.me/${oaId}`, '_blank');
+    }
+  };
+
   const quickActions = [
-    { title: 'Phản ánh', icon: <IconMegaphone />, path: '/feedback', gradient: 'linear-gradient(135deg, #FF6B6B, #EE5A24)' },
-    { title: 'Đặt lịch', icon: <IconCalendar />, path: '/booking', gradient: 'linear-gradient(135deg, #246BFD, #7C5CFC)' },
-    { title: 'Nhắn OA', icon: <IconChat />, path: '/chat', gradient: 'linear-gradient(135deg, #10B981, #059669)' },
+    { title: 'Phản ánh', icon: <IconMegaphone />, onClick: () => navigate('/feedback'), gradient: 'linear-gradient(135deg, #FF6B6B, #EE5A24)' },
+    { title: 'Đặt lịch', icon: <IconCalendar />, onClick: () => navigate('/booking'), gradient: 'linear-gradient(135deg, #246BFD, #7C5CFC)' },
+    { title: 'Nhắn OA', icon: <IconChat />, onClick: handleOpenChat, gradient: 'linear-gradient(135deg, #10B981, #059669)' },
   ];
 
   const mainServices = [
@@ -176,7 +191,7 @@ const IndexPage: React.FC = () => {
           {quickActions.map((action, i) => (
             <div
               key={action.title}
-              onClick={() => navigate(action.path)}
+              onClick={action.onClick}
               className="active-scale"
               style={{
                 flex: 1,

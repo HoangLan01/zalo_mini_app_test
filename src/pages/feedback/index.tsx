@@ -24,10 +24,10 @@ const FeedbackIndexPage: React.FC = () => {
   const resolvedCount = resolvedFeedbacks.length;
 
   return (
-    <Page className="page" style={{ backgroundColor: 'var(--surface)', height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <Page className="page" style={{ backgroundColor: 'var(--surface)', paddingBottom: '80px' }}>
       <PageHeader title="Phản ánh hiện trường" />
 
-      <Box style={{ flex: 1, overflow: 'auto', paddingBottom: '160px' }}>
+      <Box style={{ paddingBottom: '160px' }}>
         {/* Stats Banner */}
         <div className="animate-fade-in-up" style={{
           margin: '12px 16px', padding: '16px 20px',
