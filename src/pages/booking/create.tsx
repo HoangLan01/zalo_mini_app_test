@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
-import { Page, Box, Text, Select, Button, useSnackbar, DatePicker } from 'zmp-ui';
+import React, { useState, useEffect } from 'react';
+import { Page, Box, Text, Select, Button, useSnackbar, DatePicker, Input } from 'zmp-ui';
 import { useNavigate } from 'zmp-ui';
+import { openChat } from 'zmp-sdk/apis';
 import PageHeader from '@/components/PageHeader';
 import { useBookingStore } from '@/store/bookingStore';
+import { useUserStore } from '@/store/userStore';
 
 const timeSlots = [
   { value: '08:00', label: '8:00', period: 'Sáng' },
@@ -24,27 +26,71 @@ const BookingCreatePage: React.FC = () => {
   const navigate = useNavigate();
   const snackbar = useSnackbar();
   const addBooking = useBookingStore(state => state.addBooking);
+  const { userInfo, fetchUser } = useUserStore();
   
+  const [userName, setUserName] = useState('');
+  const [phone, setPhone] = useState('');
   const [category, setCategory] = useState('');
   const [date, setDate] = useState<Date>(new Date());
   const [time, setTime] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = () => {
-    if (!category || !time) {
+  useEffect(() => {
+    if (!userInfo) {
+      fetchUser();
+    } else {
+      setUserName(userInfo.name);
+    }
+  }, [userInfo, fetchUser]);
+
+  const handleSubmit = async () => {
+    if (!userName.trim() || !phone.trim() || !category || !time) {
       snackbar.openSnackbar({ type: 'warning', text: 'Vui lòng điền đầy đủ thông tin!' });
+      return;
+    }
+
+    // Simple phone validation
+    if (!/^\d{10,11}$/.test(phone.trim())) {
+      snackbar.openSnackbar({ type: 'warning', text: 'Số điện thoại không hợp lệ!' });
       return;
     }
     
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      
+    
+    const dateStr = date.toLocaleDateString('vi-VN');
+    const categoryMapping: { [key: string]: string } = {
+      'ho-tich': 'Hộ tịch (khai sinh, khai tử...)',
+      'cu-tru': 'Cư trú (đăng ký tạm trú...)',
+      'chung-thuc': 'Chứng thực giấy tờ',
+      'dat-dai': 'Đất đai – Xây dựng',
+      'xa-hoi': 'Chính sách xã hội',
+      'khac': 'Vấn đề khác'
+    };
+
+    const categoryText = categoryMapping[category] || category;
+
+    // Construct message to send to OA
+    const message = `[ĐẶT LỊCH MỚI]
+- Họ tên: ${userName}
+- SĐT: ${phone}
+- Lĩnh vực: ${categoryText}
+- Ngày hẹn: ${dateStr}
+- Khung giờ: ${time}`;
+
+    try {
+      // 1. Send message to OA
+      await openChat({
+        type: 'oa',
+        id: import.meta.env.VITE_ZALO_OA_ID,
+        message: message,
+      });
+
+      // 2. Save to local store (for simulation)
       const newBooking = {
         id: Math.random().toString(36).substr(2, 9),
         code: `LH-2026-${Math.floor(1000 + Math.random() * 9000)}`,
-        dateStr: `${date.toLocaleDateString('vi-VN')} - ${time}`,
-        category,
+        dateStr: `${dateStr} – ${time}`,
+        category: categoryText,
         status: 'pending',
         statusText: 'Chờ xác nhận',
         statusColor: '#FFA500'
@@ -53,8 +99,16 @@ const BookingCreatePage: React.FC = () => {
       addBooking(newBooking);
       
       snackbar.openSnackbar({ type: 'success', text: 'Đặt lịch thành công! Cán bộ sẽ xác nhận lại qua Zalo.' });
-      navigate('/booking', { replace: true });
-    }, 1500);
+      
+      setTimeout(() => {
+        navigate('/booking', { replace: true });
+      }, 1500);
+    } catch (error) {
+      console.error('Error in booking submission:', error);
+      snackbar.openSnackbar({ type: 'error', text: 'Không thể gửi thông tin đặt lịch. Vui lòng thử lại.' });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const morningSlots = timeSlots.filter(s => s.period === 'Sáng');
@@ -66,9 +120,34 @@ const BookingCreatePage: React.FC = () => {
 
       <Box style={{ flex: 1, overflow: 'auto', padding: '16px', paddingBottom: '160px', backgroundColor: 'var(--surface-raised)' }}>
         
+        {/* User Name */}
+        <Box className="animate-fade-in-up" style={{ marginBottom: '20px' }}>
+          <Text style={{ fontWeight: 700, marginBottom: '8px', color: 'var(--text-primary)', fontSize: '15px' }}>
+            👤 Họ và tên <span style={{ color: 'var(--danger)' }}>*</span>
+          </Text>
+          <Input 
+            placeholder="Nhập họ và tên" 
+            value={userName}
+            onChange={(e) => setUserName(e.target.value)}
+          />
+        </Box>
+
+        {/* Phone */}
+        <Box className="animate-fade-in-up delay-50" style={{ marginBottom: '20px' }}>
+          <Text style={{ fontWeight: 700, marginBottom: '8px', color: 'var(--text-primary)', fontSize: '15px' }}>
+            📞 Số điện thoại <span style={{ color: 'var(--danger)' }}>*</span>
+          </Text>
+          <Input 
+            placeholder="Nhập số điện thoại liên hệ" 
+            type="text"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+          />
+        </Box>
+
         {/* Category */}
-        <Box className="animate-fade-in-up" style={{ marginBottom: '24px' }}>
-          <Text style={{ fontWeight: 700, marginBottom: '10px', color: 'var(--text-primary)', fontSize: '15px' }}>
+        <Box className="animate-fade-in-up delay-100" style={{ marginBottom: '24px' }}>
+          <Text style={{ fontWeight: 700, marginBottom: '8px', color: 'var(--text-primary)', fontSize: '15px' }}>
             🗂️ Lĩnh vực cần tư vấn <span style={{ color: 'var(--danger)' }}>*</span>
           </Text>
           <Select 
@@ -87,8 +166,8 @@ const BookingCreatePage: React.FC = () => {
         </Box>
 
         {/* Date */}
-        <Box className="animate-fade-in-up delay-50" style={{ marginBottom: '24px' }}>
-          <Text style={{ fontWeight: 700, marginBottom: '10px', color: 'var(--text-primary)', fontSize: '15px' }}>
+        <Box className="animate-fade-in-up delay-150" style={{ marginBottom: '24px' }}>
+          <Text style={{ fontWeight: 700, marginBottom: '8px', color: 'var(--text-primary)', fontSize: '15px' }}>
             📅 Ngày hẹn <span style={{ color: 'var(--danger)' }}>*</span>
           </Text>
           <DatePicker 
@@ -102,8 +181,8 @@ const BookingCreatePage: React.FC = () => {
         </Box>
 
         {/* Time Slots Grid */}
-        <Box className="animate-fade-in-up delay-100" style={{ marginBottom: '24px' }}>
-          <Text style={{ fontWeight: 700, marginBottom: '10px', color: 'var(--text-primary)', fontSize: '15px' }}>
+        <Box className="animate-fade-in-up delay-200" style={{ marginBottom: '24px' }}>
+          <Text style={{ fontWeight: 700, marginBottom: '8px', color: 'var(--text-primary)', fontSize: '15px' }}>
             ⏰ Khung giờ mong muốn <span style={{ color: 'var(--danger)' }}>*</span>
           </Text>
 

@@ -4,13 +4,15 @@ import { useNavigate } from 'zmp-ui';
 import { openChat, chooseImage } from 'zmp-sdk/apis';
 import PageHeader from '@/components/PageHeader';
 import { useUserStore } from '@/store/userStore';
+import { requestPhoneNumber } from '@/utils/zaloHelper';
 
 const ReviewPage: React.FC = () => {
   const navigate = useNavigate();
   const snackbar = useSnackbar();
   const { userInfo, fetchUser } = useUserStore();
   
-  const [phoneNumber] = useState('0963921393'); // Mock phone number as requested
+  const [phoneNumber, setPhoneNumber] = useState('Đang lấy...');
+  const [phoneNumberToken, setPhoneNumberToken] = useState('');
   const [userName, setUserName] = useState('');
   const [unit, setUnit] = useState('');
   const [rating, setRating] = useState(0);
@@ -32,6 +34,23 @@ const ReviewPage: React.FC = () => {
       setUserName(userInfo.name);
     }
   }, [userInfo, fetchUser]);
+
+  useEffect(() => {
+    const getPhone = async () => {
+      try {
+        const token = await requestPhoneNumber();
+        if (token) {
+          setPhoneNumber('Đã xác thực qua Zalo');
+          setPhoneNumberToken(token);
+        } else {
+          setPhoneNumber('Chưa xác thực');
+        }
+      } catch (error) {
+        setPhoneNumber('Lỗi xác thực');
+      }
+    };
+    getPhone();
+  }, []);
 
   const handlePickImages = async () => {
     try {

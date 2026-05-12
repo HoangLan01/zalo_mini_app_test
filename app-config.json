@@ -6,6 +6,9 @@
     "textColor": "#FFFFFF",
     "hideActionBar": true
   },
+  "listCSS": [],
+  "listSyncJS": [],
+  "listAsyncJS": [],
   "pages": [
     "pages/index/index",
     "pages/news/index",
