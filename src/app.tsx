@@ -17,6 +17,7 @@ import NewsDetailPage from '@/pages/news/detail';
 import FeedbackIndexPage from '@/pages/feedback/index';
 import FeedbackCreatePage from '@/pages/feedback/create';
 import FeedbackDetailPage from '@/pages/feedback/detail';
+import ReviewPage from '@/pages/feedback/review';
 import BookingIndexPage from '@/pages/booking/index';
 import BookingCreatePage from '@/pages/booking/create';
 import HeritageIndexPage from '@/pages/heritage/index';
@@ -49,7 +50,7 @@ const MyApp: React.FC = () => {
             <Route path="/heritage-detail" element={<HeritageDetailPage />} />
             
             {/* Upcoming features using ComingSoon component */}
-            <Route path="/rating" element={<ComingSoon title="Đánh giá dịch vụ" />} />
+            <Route path="/rating" element={<ReviewPage />} />
             <Route path="/events" element={<ComingSoon title="Sự kiện sắp tới" />} />
             <Route path="/education" element={<ComingSoon title="Giáo dục & Đào tạo" />} />
             <Route path="/planning" element={<ComingSoon title="Thông tin quy hoạch" />} />
