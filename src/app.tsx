@@ -52,8 +52,8 @@ const MyApp: React.FC = () => {
             {/* Upcoming features using ComingSoon component */}
             <Route path="/rating" element={<ReviewPage />} />
             <Route path="/events" element={<ComingSoon title="Sự kiện sắp tới" />} />
-            <Route path="/education" element={<ComingSoon title="Giáo dục & Đào tạo" />} />
-            <Route path="/planning" element={<ComingSoon title="Thông tin quy hoạch" />} />
+            <Route path="/education" element={<ComingSoon title="Giáo dục" />} />
+            <Route path="/planning" element={<ComingSoon title="Quy hoạch" />} />
             <Route path="/services" element={<ComingSoon title="Dịch vụ đời sống" />} />
             <Route path="/profile" element={<ComingSoon title="Thông tin cá nhân" />} />
 
