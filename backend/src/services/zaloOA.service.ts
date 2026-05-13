@@ -203,6 +203,7 @@ export const sendFeedbackToOA = async (feedback: Feedback, user: User): Promise<
     }
   };
 
+  if (!user.zaloId) return null;
   return sendMessageToUser(user.zaloId, message);
 };
 
@@ -229,6 +230,7 @@ TU_CHOI [lý do]
 Để DỜI LỊCH: Reply:
 DOI_LICH [ngày] [giờ] [ghi chú]`;
 
+  if (!user.zaloId) return null;
   return sendMessageToUser(user.zaloId, { text: textContent });
 };
 

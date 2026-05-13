@@ -1,103 +1,174 @@
 import { create } from 'zustand';
+import { apiCall } from '@/services/api';
 
-export type QuestionType = 'multiple_choice' | 'true_false' | 'short_answer';
+export type QuestionType = 'MULTIPLE_CHOICE' | 'TRUE_FALSE';
+export type QuizSetStatus = 'DRAFT' | 'PUBLISHED' | 'CLOSED' | 'ARCHIVED';
+export type AttemptStatus = 'IN_PROGRESS' | 'SUBMITTED' | 'EXPIRED';
+
+export interface QuizTopic {
+  id: string;
+  slug: string;
+  title: string;
+  description?: string;
+  order: number;
+  _count?: { sets: number };
+}
+
+export interface QuizOption {
+  id: string;
+  content: string;
+  order: number;
+}
 
 export interface Question {
   id: string;
   content: string;
   type: QuestionType;
-  options?: string[]; // A, B, C, D
-  correctAnswer: string;
   points: number;
+  order: number;
+  options: QuizOption[];
 }
 
-export interface Quiz {
+export interface QuizAttemptSummary {
   id: string;
-  title: string;
-  description: string;
-  timeLimit: number; // in seconds
-  questions: Question[];
-  status: 'open' | 'closed';
+  status: AttemptStatus;
+  score: number;
+  maxScore: number;
+  timeTaken: number;
+  submittedAt?: string;
 }
 
-export interface QuizAttempt {
-  quizId: string;
-  answers: Record<string, string>; // questionId -> answer
+export interface QuizSet {
+  id: string;
+  topicId: string;
+  title: string;
+  description?: string;
+  timeLimit: number;
+  status: QuizSetStatus;
+  version: number;
+  order: number;
+  questionCount?: number;
+  attempt?: QuizAttemptSummary | null;
+  questions?: Question[];
+}
+
+export interface QuizAttemptResult extends QuizAttemptSummary {
+  quizSet: { id: string; title: string; timeLimit: number; topic: { id: string; title: string } };
+  answers: Array<{
+    id: string;
+    questionId: string;
+    selectedOptionId?: string;
+    isCorrect: boolean;
+    pointsAwarded: number;
+    questionContent: string;
+    selectedOptionContent?: string;
+    correctOptionContent?: string;
+  }>;
+}
+
+export interface LeaderboardItem {
+  id: string;
   score: number;
-  timeTaken: number; // in seconds
-  completedAt: string;
+  maxScore: number;
+  timeTaken: number;
+  submittedAt: string;
+  user: { id: string; displayName: string; avatarUrl?: string };
 }
 
 interface QuizState {
-  quizzes: Quiz[];
-  attempts: QuizAttempt[]; // For MVP mock persistence
-  getQuizById: (id: string) => Quiz | undefined;
-  saveAttempt: (attempt: QuizAttempt) => void;
-  getAttempt: (quizId: string) => QuizAttempt | undefined;
+  topics: QuizTopic[];
+  sets: QuizSet[];
+  currentSet: QuizSet | null;
+  currentAttempt: QuizAttemptSummary | null;
+  result: QuizAttemptResult | null;
+  leaderboard: LeaderboardItem[];
+  isLoading: boolean;
+  error: string | null;
+  fetchTopics: () => Promise<void>;
+  fetchSetsByTopic: (topicId: string) => Promise<void>;
+  fetchSet: (setId: string) => Promise<QuizSet>;
+  startAttempt: (setId: string) => Promise<QuizAttemptSummary>;
+  submitAttempt: (attemptId: string, payload: { timeTaken: number; expired?: boolean; answers: { questionId: string; selectedOptionId?: string | null }[] }) => Promise<QuizAttemptSummary>;
+  fetchResult: (setId: string) => Promise<void>;
+  fetchLeaderboard: (setId: string) => Promise<void>;
+  clearError: () => void;
 }
 
-const mockQuestions: Question[] = [
-  {
-    id: 'q1',
-    content: 'Chuyển đổi số là gì?',
-    type: 'multiple_choice',
-    options: [
-      'Là việc số hóa giấy tờ',
-      'Là việc ứng dụng công nghệ thông tin vào mọi hoạt động',
-      'Là quá trình thay đổi tổng thể và toàn diện của cá nhân, tổ chức về cách sống, cách làm việc và phương thức sản xuất dựa trên công nghệ số',
-      'Là việc mua sắm máy tính và phần mềm mới'
-    ],
-    correctAnswer: 'Là quá trình thay đổi tổng thể và toàn diện của cá nhân, tổ chức về cách sống, cách làm việc và phương thức sản xuất dựa trên công nghệ số',
-    points: 10
-  },
-  {
-    id: 'q2',
-    content: 'Ứng dụng VNeID do cơ quan nào quản lý?',
-    type: 'multiple_choice',
-    options: [
-      'Bộ Thông tin và Truyền thông',
-      'Bộ Công an',
-      'Bộ Y tế',
-      'Ủy ban nhân dân các cấp'
-    ],
-    correctAnswer: 'Bộ Công an',
-    points: 10
-  },
-  {
-    id: 'q3',
-    content: 'Đăng ký tài khoản Định danh điện tử mức độ 2 phải ra cơ quan Công an. Đúng hay sai?',
-    type: 'true_false',
-    options: ['Đúng', 'Sai'],
-    correctAnswer: 'Đúng',
-    points: 10
-  }
-];
+export const useQuizStore = create<QuizState>((set) => ({
+  topics: [],
+  sets: [],
+  currentSet: null,
+  currentAttempt: null,
+  result: null,
+  leaderboard: [],
+  isLoading: false,
+  error: null,
 
-const mockQuizzes: Quiz[] = [
-  {
-    id: 'quiz-001',
-    title: 'Kiến thức Chuyển đổi số Cơ bản',
-    description: 'Bài kiểm tra kiến thức về các khái niệm và dịch vụ công phổ biến trong công cuộc Chuyển đổi số quốc gia.',
-    timeLimit: 300, // 5 minutes
-    questions: mockQuestions,
-    status: 'open'
+  fetchTopics: async () => {
+    set({ isLoading: true, error: null });
+    try {
+      const topics = await apiCall<QuizTopic[]>('/api/quiz/topics');
+      set({ topics, isLoading: false });
+    } catch (error: any) {
+      set({ error: error.message, isLoading: false });
+    }
   },
-  {
-    id: 'quiz-002',
-    title: 'An toàn thông tin trên không gian mạng',
-    description: 'Nhận biết các rủi ro lừa đảo và cách bảo vệ thông tin cá nhân.',
-    timeLimit: 600, // 10 minutes
-    questions: [], // Mock empty for visual
-    status: 'closed'
-  }
-];
 
-export const useQuizStore = create<QuizState>((set, get) => ({
-  quizzes: mockQuizzes,
-  attempts: [],
-  getQuizById: (id) => get().quizzes.find(q => q.id === id),
-  saveAttempt: (attempt) => set((state) => ({
-    attempts: [...state.attempts, attempt]
-  })),
-  getAttempt: (quizId) => get().attempts.find(a => a.quizId === quizId)
+  fetchSetsByTopic: async (topicId) => {
+    set({ isLoading: true, error: null, sets: [] });
+    try {
+      const sets = await apiCall<QuizSet[]>(`/api/quiz/topics/${topicId}/sets`);
+      set({ sets, isLoading: false });
+    } catch (error: any) {
+      set({ error: error.message, isLoading: false });
+    }
+  },
+
+  fetchSet: async (setId) => {
+    set({ isLoading: true, error: null });
+    try {
+      const currentSet = await apiCall<QuizSet>(`/api/quiz/sets/${setId}`);
+      set({ currentSet, currentAttempt: currentSet.attempt || null, isLoading: false });
+      return currentSet;
+    } catch (error: any) {
+      set({ error: error.message, isLoading: false });
+      throw error;
+    }
+  },
+
+  startAttempt: async (setId) => {
+    const attempt = await apiCall<QuizAttemptSummary>(`/api/quiz/sets/${setId}/attempts/start`, { method: 'POST' });
+    set({ currentAttempt: attempt });
+    return attempt;
+  },
+
+  submitAttempt: async (attemptId, payload) => {
+    const attempt = await apiCall<QuizAttemptSummary>(`/api/quiz/attempts/${attemptId}/submit`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+    set({ currentAttempt: attempt });
+    return attempt;
+  },
+
+  fetchResult: async (setId) => {
+    set({ isLoading: true, error: null });
+    try {
+      const result = await apiCall<QuizAttemptResult>(`/api/quiz/sets/${setId}/result`);
+      set({ result, isLoading: false });
+    } catch (error: any) {
+      set({ error: error.message, isLoading: false });
+    }
+  },
+
+  fetchLeaderboard: async (setId) => {
+    try {
+      const leaderboard = await apiCall<LeaderboardItem[]>(`/api/quiz/sets/${setId}/leaderboard`);
+      set({ leaderboard });
+    } catch (error: any) {
+      set({ error: error.message });
+    }
+  },
+
+  clearError: () => set({ error: null })
 }));

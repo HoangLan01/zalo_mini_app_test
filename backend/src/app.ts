@@ -2,7 +2,12 @@
 import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
-import { rateLimiter } from './middleware/rateLimit.middleware';
+import {
+  adminQuizRateLimiter,
+  authRateLimiter,
+  globalRateLimiter,
+  publicQuizRateLimiter
+} from './middleware/rateLimit.middleware';
 import { errorHandler } from './middleware/errorHandler.middleware';
 import logger from './utils/logger';
 
@@ -15,8 +20,14 @@ import eventsRoutes from './routes/events.routes';
 import heritageRoutes from './routes/heritage.routes';
 import uploadRoutes from './routes/upload.routes';
 import webhookRoutes from './routes/webhook.routes';
+import quizRoutes from './routes/quiz.routes';
+import adminQuizRoutes from './routes/adminQuiz.routes';
 
 const app = express();
+
+// Trust the first reverse proxy so rate limiting uses the real client IP
+// from X-Forwarded-For instead of the local Nginx address.
+app.set('trust proxy', 1);
 
 // 1. Webhook route phải dùng express.raw ĐỂ preserve raw body cho verify signature
 app.use('/webhook/zalo', express.raw({ type: 'application/json' }), webhookRoutes);
@@ -34,10 +45,7 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// 5. Rate Limiting
-app.use(rateLimiter);
-
-// 6. Request Logging
+// 5. Request Logging
 app.use((req, res, next) => {
   const start = Date.now();
   res.on('finish', () => {
@@ -47,18 +55,23 @@ app.use((req, res, next) => {
   next();
 });
 
+// 6. Rate Limiting
+app.use('/api', globalRateLimiter);
+
 // 7. API Routes
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-app.use('/api/auth', authRoutes);
+app.use('/api/auth', authRateLimiter, authRoutes);
 app.use('/api/feedbacks', feedbackRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/ratings', ratingRoutes);
 app.use('/api/events', eventsRoutes);
 app.use('/api/heritage', heritageRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/quiz', publicQuizRateLimiter, quizRoutes);
+app.use('/api/admin/quiz', adminQuizRateLimiter, adminQuizRoutes);
 
 // 8. 404 Handler
 app.use((req, res, next) => {
