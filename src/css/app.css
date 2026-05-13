@@ -577,29 +577,6 @@ body, * {
   text-align: center;
 }
 
-/* ==================== Featured Card (News) ==================== */
-
-.featured-card {
-  position: relative;
-  border-radius: var(--radius-xl);
-  overflow: hidden;
-  cursor: pointer;
-  transition: transform 0.2s ease;
-}
-
-.featured-card:active {
-  transform: scale(0.98);
-}
-
-.featured-card-overlay {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  padding: 20px;
-  background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.3) 50%, transparent 100%);
-}
-
 /* ==================== Scrollbar ==================== */
 
 ::-webkit-scrollbar {
@@ -813,18 +790,6 @@ body, * {
   text-overflow: ellipsis;
 }
 
-.home-icon-button {
-  width: 38px;
-  height: 38px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  color: #083b9b;
-  background: transparent;
-}
-
-.home-icon-button:active,
 .quick-action-card:active,
 .public-service-card:active,
 .explore-item:active,
@@ -1267,6 +1232,14 @@ body, * {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   column-gap: 9px;
   row-gap: 18px;
+}
+
+.explore-grid .explore-item:nth-last-child(2):nth-child(4n + 1) {
+  grid-column: 2;
+}
+
+.explore-grid .explore-item:last-child:nth-child(4n + 2) {
+  grid-column: 3;
 }
 
 .explore-item {

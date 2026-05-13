@@ -247,32 +247,3 @@ Nhận xét: ${rating.comment || 'Không có'}`;
 
   await sendMessageToUser(leaderId, { text: textContent });
 };
-
-export const getOAArticles = async (offset: number = 0, limit: number = 10) => {
-  try {
-    const headers = await getBaseHeaders();
-    const url = `https://openapi.zalo.me/v2.0/article/getslice?offset=${offset}&limit=${limit}&type=normal`;
-    logger.info(`Fetching OA articles: ${url}`);
-    logger.info(`Using access_token (first 20 chars): ${headers.access_token?.substring(0, 20)}...`);
-
-    const response = await axios.get(url, { headers });
-    logger.info(`OA getslice raw response status: ${response.status}, data: ${JSON.stringify(response.data).substring(0, 500)}`);
-    return response.data;
-  } catch (error: any) {
-    logger.error('Error fetching OA articles:', error.response?.data || error.message);
-    return null;
-  }
-};
-
-export const getOAArticleDetail = async (id: string) => {
-  try {
-    const response = await axios.get(
-      `https://openapi.zalo.me/v2.0/article/getdetail?id=${id}`,
-      { headers: await getBaseHeaders() }
-    );
-    return response.data;
-  } catch (error: any) {
-    logger.error(`Error fetching OA article detail for ${id}:`, error.response?.data || error.message);
-    return null;
-  }
-};

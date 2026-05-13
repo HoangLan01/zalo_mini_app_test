@@ -45,28 +45,6 @@ export const getSheetData = async (sheetId: string, range: string): Promise<stri
   }
 };
 
-export const parseNewsRow = (row: string[]) => {
-  try {
-    const [id, title, summary, content, thumbnailUrl, category, featured, publishedAt, isActive] = row;
-    if (isActive !== 'TRUE') return null;
-    if (!id || !title) return null;
-
-    return {
-      id,
-      title,
-      summary,
-      content,
-      thumbnailUrl,
-      category,
-      featured: featured === 'TRUE',
-      publishedAt
-    };
-  } catch (e) {
-    logger.warn('Failed to parse News row');
-    return null;
-  }
-};
-
 export const parseEventRow = (row: string[]) => {
   try {
     const [id, title, description, thumbnailUrl, category, location, startAt, endAt, organizer, contactInfo, isActive] = row;

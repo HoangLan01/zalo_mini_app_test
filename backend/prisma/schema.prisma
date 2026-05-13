@@ -18,22 +18,6 @@ model OAToken {
   @@map("oa_tokens")
 }
 
-model Article {
-  id           String   @id
-  title        String
-  description  String?
-  content      String?
-  thumbnailUrl String?
-  category     String   @default("Tin tức") @db.VarChar(50)
-  publishedAt  DateTime @db.Timestamptz(6)
-  author       String?  @default("Admin") @db.VarChar(100)
-  createdAt    DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt    DateTime @default(now()) @updatedAt @db.Timestamptz(6)
-
-  @@index([publishedAt(sort: Desc)])
-  @@map("articles")
-}
-
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model bookings {

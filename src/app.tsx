@@ -12,8 +12,6 @@ import DvcPage from '@/pages/dvc/index';
 import IhanoiPage from '@/pages/ihanoi/index';
 import VneidPage from '@/pages/vneid/index';
 import TtdtPage from '@/pages/ttdt/index';
-import NewsIndexPage from '@/pages/news/index';
-import NewsDetailPage from '@/pages/news/detail';
 import FeedbackIndexPage from '@/pages/feedback/index';
 import FeedbackCreatePage from '@/pages/feedback/create';
 import FeedbackDetailPage from '@/pages/feedback/detail';
@@ -37,8 +35,6 @@ const MyApp: React.FC = () => {
         <ZMPRouter>
           <AnimationRoutes>
             <Route path="/" element={<IndexPage />} />
-            <Route path="/news" element={<NewsIndexPage />} />
-            <Route path="/news-detail" element={<NewsDetailPage />} />
             <Route path="/feedback" element={<FeedbackIndexPage />} />
             <Route path="/feedback-create" element={<FeedbackCreatePage />} />
             <Route path="/feedback-detail" element={<FeedbackDetailPage />} />

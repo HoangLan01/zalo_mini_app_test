@@ -1,13 +1,17 @@
-import React from 'react';
+import React, { useLayoutEffect } from 'react';
 import { Page, Text, useNavigate } from 'zmp-ui';
 import { openChat } from 'zmp-sdk/apis';
 
 import wardLogo from '../../../images/anh_logo.jpg';
 import { useUserStore } from '@/store/userStore';
+import {
+  consumeHomeScrollRestoration,
+  restoreHomeScrollPosition,
+  saveHomeScrollPosition,
+} from '@/utils/homeScrollRestoration';
 
 type IconName =
   | 'home'
-  | 'bell'
   | 'badge'
   | 'megaphone'
   | 'calendar'
@@ -16,7 +20,6 @@ type IconName =
   | 'heart'
   | 'medical'
   | 'education'
-  | 'news'
   | 'globe'
   | 'spark'
   | 'landmark'
@@ -44,12 +47,6 @@ const Icon = ({ name, size = 20 }: { name: IconName; size?: number }) => {
         <path d="M3 10.5 12 3l9 7.5" />
         <path d="M5 10v10h14V10" />
         <path d="M9 20v-6h6v6" />
-      </>
-    ),
-    bell: (
-      <>
-        <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
-        <path d="M10 21h4" />
       </>
     ),
     badge: (
@@ -111,14 +108,6 @@ const Icon = ({ name, size = 20 }: { name: IconName; size?: number }) => {
         <path d="m3 8 9-4 9 4-9 4-9-4Z" />
         <path d="M7 10.5v4.2c1.6 1.2 3.2 1.8 5 1.8s3.4-.6 5-1.8v-4.2" />
         <path d="M21 8v6" />
-      </>
-    ),
-    news: (
-      <>
-        <path d="M5 4h11a3 3 0 0 1 3 3v13H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" />
-        <path d="M7 8h7" />
-        <path d="M7 12h8" />
-        <path d="M7 16h5" />
       </>
     ),
     globe: (
@@ -192,6 +181,18 @@ const IndexPage: React.FC = () => {
   const citizenName = getGreetingName(userInfo?.name);
   const shouldAnimateName = citizenName.length > 18;
 
+  useLayoutEffect(() => {
+    const scrollTop = consumeHomeScrollRestoration();
+    if (scrollTop !== null) {
+      restoreHomeScrollPosition(scrollTop);
+    }
+  }, []);
+
+  const navigateFromHome = (path: string, state?: Record<string, unknown>) => {
+    saveHomeScrollPosition();
+    navigate(path, state ? { state } : undefined);
+  };
+
   const handleOpenChat = async () => {
     try {
       await openChat({
@@ -211,14 +212,14 @@ const IndexPage: React.FC = () => {
       subtitle: 'Kiến nghị',
       icon: 'megaphone' as IconName,
       tone: 'blue',
-      onClick: () => navigate('/feedback'),
+      onClick: () => navigateFromHome('/feedback'),
     },
     {
       title: 'Đặt lịch',
       subtitle: 'Làm việc',
       icon: 'calendar' as IconName,
       tone: 'warm',
-      onClick: () => navigate('/booking'),
+      onClick: () => navigateFromHome('/booking'),
     },
     {
       title: 'Nhắn OA',
@@ -261,7 +262,6 @@ const IndexPage: React.FC = () => {
   ];
 
   const exploreItems = [
-    { title: 'Tin tức', icon: 'news' as IconName, tone: 'sky', path: '/news' },
     { title: 'Trang TTĐT', icon: 'globe' as IconName, tone: 'violet', path: '/ttdt' },
     { title: 'Sự kiện', icon: 'spark' as IconName, tone: 'orange', path: '/events' },
     { title: 'Di tích', icon: 'landmark' as IconName, tone: 'emerald', path: '/heritage' },
@@ -279,9 +279,6 @@ const IndexPage: React.FC = () => {
           </span>
           <Text className="home-brand-title">Phường Tùng Thiện</Text>
         </div>
-        <button className="home-icon-button" type="button" aria-label="Thông báo">
-          <Icon name="bell" size={21} />
-        </button>
       </header>
 
       <section className="home-hero" aria-labelledby="home-title">
@@ -327,7 +324,7 @@ const IndexPage: React.FC = () => {
           </div>
           <Text className="admin-banner-title">Hành chính hiện đại - Phục vụ người dân</Text>
           <Text className="admin-banner-copy">Minh bạch - Nhanh chóng - Tiện lợi</Text>
-          <button className="admin-banner-button" type="button" onClick={() => navigate('/dvc')}>
+          <button className="admin-banner-button" type="button" onClick={() => navigateFromHome('/dvc')}>
             <span>Tìm hiểu thêm</span>
             <Icon name="arrow" size={18} />
           </button>
@@ -353,7 +350,7 @@ const IndexPage: React.FC = () => {
         <section className="home-section">
           <div className="home-section-heading">
             <Text className="home-section-title">Dịch vụ công</Text>
-            <button type="button" className="home-section-link" onClick={() => navigate('/dvc')}>
+            <button type="button" className="home-section-link" onClick={() => navigateFromHome('/dvc')}>
               Tất cả
             </button>
           </div>
@@ -363,7 +360,7 @@ const IndexPage: React.FC = () => {
                 key={service.title}
                 type="button"
                 className="public-service-card"
-                onClick={() => navigate(service.path, { state: { title: service.title } })}
+                onClick={() => navigateFromHome(service.path, { title: service.title })}
               >
                 <span className={`service-icon service-icon-${service.tone}`}>
                   <Icon name={service.icon} size={19} />
@@ -383,7 +380,7 @@ const IndexPage: React.FC = () => {
                 key={item.title}
                 type="button"
                 className="explore-item"
-                onClick={() => navigate(item.path, { state: { title: item.title } })}
+                onClick={() => navigateFromHome(item.path, { title: item.title })}
               >
                 <span className={`explore-icon explore-icon-${item.tone}`}>
                   <Icon name={item.icon} size={20} />

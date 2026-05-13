@@ -124,7 +124,7 @@ Body text is kept at a comfortable 16px for primary reading to ensure accessibil
 
 The layout philosophy follows a **Fluid Grid** model designed specifically for mobile-first interactions. A 16px (1rem) gutter is the baseline for horizontal rhythm, while 20px (1.25rem) side margins ensure content does not touch the edge of the device screen.
 
-Spacing follows an 8px (0.5rem) incremental scale. Components are grouped using "Stack Gaps" to maintain a clear relationship between elements. Large sections (e.g., separating "Administrative Procedures" from "News") use a generous 32px (2rem) margin to provide visual breathing room, reinforcing the "accessible and calm" mood of the digital environment.
+Spacing follows an 8px (0.5rem) incremental scale. Components are grouped using "Stack Gaps" to maintain a clear relationship between elements. Large sections (e.g., separating "Administrative Procedures" from "Community Services") use a generous 32px (2rem) margin to provide visual breathing room, reinforcing the "accessible and calm" mood of the digital environment.
 
 ## Elevation & Depth
 

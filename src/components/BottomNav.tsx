@@ -1,6 +1,7 @@
 import React from 'react';
 import { BottomNavigation, useLocation, useNavigate } from 'zmp-ui';
 import { openChat } from 'zmp-sdk/apis';
+import { clearHomeScrollRestoration } from '@/utils/homeScrollRestoration';
 
 const HomeIcon = ({ active }: { active?: boolean }) => (
   <svg
@@ -49,7 +50,10 @@ const BottomNav = () => {
         label="Trang chủ"
         icon={<HomeIcon />}
         activeIcon={<HomeIcon active />}
-        onClick={() => navigate('/', { replace: true })}
+        onClick={() => {
+          clearHomeScrollRestoration();
+          navigate('/', { replace: true });
+        }}
       />
       <BottomNavigation.Item
         key="chat"
