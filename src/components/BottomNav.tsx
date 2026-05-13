@@ -2,17 +2,34 @@ import React from 'react';
 import { BottomNavigation, useLocation, useNavigate } from 'zmp-ui';
 import { openChat } from 'zmp-sdk/apis';
 
-// Inline SVG icons — always render correctly regardless of font loading
 const HomeIcon = ({ active }: { active?: boolean }) => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={active ? 'var(--primary, #246BFD)' : '#8f9499'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-    <polyline points="9 22 9 12 15 12 15 22"/>
+  <svg
+    width="22"
+    height="22"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke={active ? 'var(--primary, #0052cc)' : '#8f9499'}
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+    <polyline points="9 22 9 12 15 12 15 22" />
   </svg>
 );
 
 const ChatIcon = ({ active }: { active?: boolean }) => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={active ? 'var(--primary, #246BFD)' : '#8f9499'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+  <svg
+    width="22"
+    height="22"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke={active ? 'var(--primary, #0052cc)' : '#8f9499'}
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
   </svg>
 );
 
@@ -47,7 +64,6 @@ const BottomNav = () => {
               message: 'Xin chào, tôi cần hỗ trợ',
             });
           } catch (error) {
-            // Fallback cho trình duyệt Web/PC
             const oaId = import.meta.env.VITE_ZALO_OA_ID;
             window.open(`https://zalo.me/${oaId}`, '_blank');
           }

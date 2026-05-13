@@ -22,8 +22,6 @@ import BookingIndexPage from '@/pages/booking/index';
 import BookingCreatePage from '@/pages/booking/create';
 import HeritageIndexPage from '@/pages/heritage/index';
 import HeritageDetailPage from '@/pages/heritage/detail';
-
-// Imports for other pages will be added later when implemented
 import { useUserStore } from '@/store/userStore';
 
 const MyApp: React.FC = () => {
@@ -48,13 +46,14 @@ const MyApp: React.FC = () => {
             <Route path="/booking-create" element={<BookingCreatePage />} />
             <Route path="/heritage" element={<HeritageIndexPage />} />
             <Route path="/heritage-detail" element={<HeritageDetailPage />} />
-            
-            {/* Upcoming features using ComingSoon component */}
+
             <Route path="/rating" element={<ReviewPage />} />
             <Route path="/events" element={<ComingSoon title="Sự kiện sắp tới" />} />
             <Route path="/education" element={<ComingSoon title="Giáo dục" />} />
             <Route path="/planning" element={<ComingSoon title="Quy hoạch" />} />
             <Route path="/services" element={<ComingSoon title="Dịch vụ đời sống" />} />
+            <Route path="/social-security" element={<ComingSoon title="An sinh xã hội" />} />
+            <Route path="/health" element={<ComingSoon title="Y tế" />} />
             <Route path="/profile" element={<ComingSoon title="Thông tin cá nhân" />} />
 
             <Route path="/quiz" element={<QuizIndexPage />} />
@@ -64,7 +63,7 @@ const MyApp: React.FC = () => {
             <Route path="/ihanoi" element={<IhanoiPage />} />
             <Route path="/vneid" element={<VneidPage />} />
             <Route path="/ttdt" element={<TtdtPage />} />
-            
+
             <Route path="*" element={<ComingSoon title="Đang phát triển" />} />
           </AnimationRoutes>
           <BottomNav />
