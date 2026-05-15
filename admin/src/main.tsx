@@ -63,7 +63,9 @@ type Stats = {
 type ViewMode = 'bank' | 'create';
 type NavigationMode = 'push' | 'replace';
 type QuestionDraft = {
+  id?: string;
   content: string;
+  type: 'MULTIPLE_CHOICE' | 'TRUE_FALSE';
   points: number;
   order: number;
   explanation: string;
@@ -71,7 +73,9 @@ type QuestionDraft = {
 };
 
 const emptyQuestionDraft = (order = 1): QuestionDraft => ({
+  id: `draft-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
   content: '',
+  type: 'MULTIPLE_CHOICE',
   points: 10,
   order,
   explanation: '',
@@ -196,9 +200,8 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   const [message, setMessage] = useState('');
   const [messageTone, setMessageTone] = useState<'info' | 'error'>('info');
   const [loading, setLoading] = useState(false);
-  const [topicForm, setTopicForm] = useState({ title: '', description: '', order: 0 });
-  const [setForm, setSetForm] = useState({ title: '', description: '', timeLimit: 300, order: 0 });
-  const [questionDraft, setQuestionDraft] = useState<QuestionDraft>(emptyQuestionDraft());
+  const [modalState, setModalState] = useState<{ type: 'TOPIC_CREATE' | 'TOPIC_EDIT' | 'SET_CREATE' | 'SET_EDIT' | 'SET_PUBLISH' | 'SET_CLOSE' | 'SET_CLONE' | null; payload?: any }>({ type: null });
+  const [modalForm, setModalForm] = useState({ title: '', description: '', timeLimit: 300, order: 0, setId: '' });
   const [stats, setStats] = useState<Stats | null>(null);
 
   const selectedSet = useMemo(() => sets.find(item => item.id === selectedSetId), [sets, selectedSetId]);
@@ -309,7 +312,6 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   useEffect(() => {
     loadQuestions(selectedSetId).catch(err => showMessage(err instanceof Error ? err.message : 'Không thể tải câu hỏi', 'error'));
     loadStats(selectedSetId).catch(err => showMessage(err instanceof Error ? err.message : 'Không thể tải thống kê', 'error'));
-    setQuestionDraft(emptyQuestionDraft(questions.length + 1));
   }, [selectedSetId]);
 
   const action = async (fn: () => Promise<unknown>, successMessage?: string) => {
@@ -323,110 +325,67 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
     }
   };
 
-  const createTopic = async (event: React.FormEvent) => {
-    event.preventDefault();
-    await action(async () => {
-      await api('/api/admin/quiz/topics', { method: 'POST', body: JSON.stringify(topicForm) });
-      setTopicForm({ title: '', description: '', order: 0 });
-    }, 'Đã thêm chủ đề');
+  const openModal = (type: 'TOPIC_CREATE' | 'TOPIC_EDIT' | 'SET_CREATE' | 'SET_EDIT' | 'SET_PUBLISH' | 'SET_CLOSE' | 'SET_CLONE', payload?: any) => {
+    setModalForm({
+      title: payload?.title || '',
+      description: payload?.description || '',
+      timeLimit: payload?.timeLimit || 300,
+      order: payload?.order || 0,
+      setId: selectedSetId || (sets[0]?.id || '')
+    });
+    setModalState({ type, payload });
   };
+  const closeModal = () => setModalState({ type: null });
 
-  const createSet = async (event: React.FormEvent) => {
+  const submitModal = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!selectedTopicId) {
+    if (!modalState.type) return;
+    if (modalState.type === 'SET_CREATE' && !selectedTopicId) {
       showMessage('Chọn chủ đề trước khi tạo bộ câu hỏi', 'error');
       return;
     }
     await action(async () => {
-      const created = await api<QuizSet>('/api/admin/quiz/sets', {
-        method: 'POST',
-        body: JSON.stringify({ ...setForm, topicId: selectedTopicId })
-      });
-      setSelectedSetId(created.id);
-      setSetForm({ title: '', description: '', timeLimit: 300, order: 0 });
-    }, 'Đã thêm bộ câu hỏi');
+      if (modalState.type === 'TOPIC_CREATE') {
+        await api('/api/admin/quiz/topics', { method: 'POST', body: JSON.stringify({ title: modalForm.title, description: modalForm.description, order: modalForm.order }) });
+      } else if (modalState.type === 'TOPIC_EDIT') {
+        await api(`/api/admin/quiz/topics/${modalState.payload.id}`, { method: 'PATCH', body: JSON.stringify({ title: modalForm.title, description: modalForm.description, order: modalForm.order }) });
+      } else if (modalState.type === 'SET_CREATE') {
+        const created = await api<QuizSet>('/api/admin/quiz/sets', { method: 'POST', body: JSON.stringify({ title: modalForm.title, description: modalForm.description, timeLimit: modalForm.timeLimit, order: modalForm.order, topicId: selectedTopicId }) });
+        setSelectedSetId(created.id);
+      } else if (modalState.type === 'SET_EDIT') {
+        await api(`/api/admin/quiz/sets/${modalState.payload.id}`, { method: 'PATCH', body: JSON.stringify({ title: modalForm.title, description: modalForm.description, timeLimit: modalForm.timeLimit, order: modalForm.order }) });
+      } else if (modalState.type === 'SET_PUBLISH') {
+        if (!modalForm.setId) throw new Error('Vui lòng chọn bộ câu hỏi');
+        await api(`/api/admin/quiz/sets/${modalForm.setId}/publish`, { method: 'POST' });
+      } else if (modalState.type === 'SET_CLOSE') {
+        if (!modalForm.setId) throw new Error('Vui lòng chọn bộ câu hỏi');
+        await api(`/api/admin/quiz/sets/${modalForm.setId}/close`, { method: 'POST' });
+      } else if (modalState.type === 'SET_CLONE') {
+        if (!modalForm.setId) throw new Error('Vui lòng chọn bộ câu hỏi');
+        await api(`/api/admin/quiz/sets/${modalForm.setId}/clone`, { method: 'POST' });
+      }
+      closeModal();
+    }, 'Thao tác thành công');
   };
 
-  const saveQuestion = async (publishAfterSave = false) => {
-    if (!selectedSetId) {
-      showMessage('Chọn bộ câu hỏi trước khi lưu', 'error');
-      return;
-    }
-    const hasEmptyOption = questionDraft.options.some(option => !option.content.trim());
-    if (!questionDraft.content.trim() || hasEmptyOption) {
-      showMessage('Nhập đầy đủ nội dung câu hỏi và 4 đáp án', 'error');
+  const saveBatchQuestions = async (draftQuestions: QuestionDraft[], deletedIds: string[]) => {
+    if (!selectedSetId) return;
+    const hasEmptyOption = draftQuestions.some(q => q.options.some(opt => !opt.content.trim()));
+    const hasEmptyContent = draftQuestions.some(q => !q.content.trim());
+    if (hasEmptyContent || hasEmptyOption) {
+      showMessage('Nhập đầy đủ nội dung câu hỏi và các đáp án', 'error');
       return;
     }
     await action(async () => {
-      await api('/api/admin/quiz/questions', {
+      await api(`/api/admin/quiz/sets/${selectedSetId}/questions/batch`, {
         method: 'POST',
-        body: JSON.stringify({
-          quizSetId: selectedSetId,
-          content: questionDraft.content.trim(),
-          type: 'MULTIPLE_CHOICE',
-          points: questionDraft.points,
-          order: questionDraft.order,
-          explanation: questionDraft.explanation.trim() || undefined,
-          options: questionDraft.options.map((option, index) => ({
-            content: option.content.trim(),
-            order: index,
-            isCorrect: option.isCorrect
-          }))
-        })
+        body: JSON.stringify({ questions: draftQuestions, deletedIds })
       });
-      if (publishAfterSave) {
-        await api(`/api/admin/quiz/sets/${selectedSetId}/publish`, { method: 'POST' });
-      }
-      setQuestionDraft(emptyQuestionDraft(questions.length + 2));
       navigateView('bank', 'replace');
-    }, publishAfterSave ? 'Đã lưu câu hỏi và xuất bản bộ câu hỏi' : 'Đã lưu câu hỏi');
+    }, 'Đã lưu tất cả câu hỏi');
   };
 
-  const editTopic = (topic: Topic) => action(async () => {
-    const title = window.prompt('Tên chủ đề', topic.title);
-    if (!title) return;
-    const description = window.prompt('Mô tả chủ đề', topic.description || '') || '';
-    await api(`/api/admin/quiz/topics/${topic.id}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ title, description })
-    });
-  }, 'Đã cập nhật chủ đề');
-
-  const editSet = (set: QuizSet) => action(async () => {
-    const title = window.prompt('Tiêu đề bộ câu hỏi', set.title);
-    if (!title) return;
-    const description = window.prompt('Mô tả bộ câu hỏi', set.description || '') || '';
-    const timeLimit = Number(window.prompt('Thời gian làm bài (giây)', String(set.timeLimit)) || set.timeLimit);
-    await api(`/api/admin/quiz/sets/${set.id}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ title, description, timeLimit })
-    });
-  }, 'Đã cập nhật bộ câu hỏi');
-
-  const editQuestion = (question: Question) => action(async () => {
-    const content = window.prompt('Nội dung câu hỏi', question.content);
-    if (!content) return;
-    const options = question.options.map((option, index) => ({
-      content: window.prompt(`Đáp án ${String.fromCharCode(65 + index)}`, option.content) || option.content,
-      order: index,
-      isCorrect: option.isCorrect
-    }));
-    const currentCorrectIndex = Math.max(1, question.options.findIndex(option => option.isCorrect) + 1);
-    const correctIndex = Number(window.prompt('Đáp án đúng là số thứ tự nào?', String(currentCorrectIndex)) || currentCorrectIndex) - 1;
-    await api(`/api/admin/quiz/questions/${question.id}`, {
-      method: 'PATCH',
-      body: JSON.stringify({
-        content,
-        points: question.points,
-        options: options.map((option, index) => ({ ...option, isCorrect: index === correctIndex }))
-      })
-    });
-  }, 'Đã cập nhật câu hỏi');
-
-  const startCreateQuestion = () => {
-    setQuestionDraft(emptyQuestionDraft(questions.length + 1));
-    navigateView('create', 'push');
-  };
+  const startCreateQuestion = () => navigateView('create', 'push');
 
   return (
     <AdminShell
@@ -434,9 +393,68 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
       onNavigate={navigateView}
       onLogout={onLogout}
       onCreateQuestion={startCreateQuestion}
-      onSaveQuestion={view === 'create' ? () => saveQuestion(false) : undefined}
+      onSaveQuestion={undefined}
+      onCloneClick={() => openModal('SET_CLONE')}
+      onCloseClick={() => openModal('SET_CLOSE')}
+      onPublishClick={() => openModal('SET_PUBLISH')}
     >
       {message && <Notice tone={messageTone} message={message} onClose={() => setMessage('')} />}
+      
+      <Modal isOpen={modalState.type !== null} onClose={closeModal} title={
+        modalState.type === 'TOPIC_CREATE' ? 'Thêm chủ đề mới' :
+        modalState.type === 'TOPIC_EDIT' ? 'Cập nhật chủ đề' :
+        modalState.type === 'SET_CREATE' ? 'Thêm bộ câu hỏi mới' :
+        modalState.type === 'SET_EDIT' ? 'Cập nhật bộ câu hỏi' :
+        modalState.type === 'SET_PUBLISH' ? 'Xuất bản bộ câu hỏi' :
+        modalState.type === 'SET_CLOSE' ? 'Đóng bộ câu hỏi' :
+        'Tạo bản sao bộ câu hỏi'
+      }>
+        <form className="stack-form" onSubmit={submitModal}>
+          {modalState.type && ['SET_PUBLISH', 'SET_CLOSE', 'SET_CLONE'].includes(modalState.type) ? (
+            <>
+              <p style={{ marginBottom: '16px' }}>
+                {modalState.type === 'SET_PUBLISH' ? 'Bộ câu hỏi này sẽ được công khai để mọi người có thể tham gia.' :
+                 modalState.type === 'SET_CLOSE' ? 'Bộ câu hỏi này sẽ bị đóng và không ai có thể làm tiếp.' :
+                 'Tạo một bản sao của bộ câu hỏi này để tiếp tục chỉnh sửa thành một bài thi mới.'}
+              </p>
+              <label>Chọn bộ câu hỏi
+                <Select value={modalForm.setId} onChange={v => setModalForm({ ...modalForm, setId: v })} ariaLabel="Chọn bộ">
+                  <option value="">-- Chọn một bộ câu hỏi --</option>
+                  {sets
+                    .filter(set => {
+                      if (modalState.type === 'SET_PUBLISH') return set.status === 'DRAFT' || set.status === 'CLOSED';
+                      if (modalState.type === 'SET_CLOSE') return set.status === 'PUBLISHED';
+                      return true;
+                    })
+                    .map(set => <option key={set.id} value={set.id}>{set.title} ({statusLabel(set.status)})</option>)}
+                </Select>
+              </label>
+            </>
+          ) : (
+            <>
+              <label>Tên {modalState.type?.includes('TOPIC') ? 'chủ đề' : 'bộ câu hỏi'}
+                <input required value={modalForm.title} onChange={e => setModalForm({ ...modalForm, title: e.target.value })} />
+              </label>
+              <label>Mô tả
+                <textarea value={modalForm.description} onChange={e => setModalForm({ ...modalForm, description: e.target.value })} />
+              </label>
+              {modalState.type?.includes('SET') && (
+                <label>Thời gian làm bài (giây)
+                  <input type="number" min={30} value={modalForm.timeLimit} onChange={e => setModalForm({ ...modalForm, timeLimit: Number(e.target.value) })} />
+                </label>
+              )}
+              <label>Thứ tự ưu tiên
+                <input type="number" min={0} value={modalForm.order} onChange={e => setModalForm({ ...modalForm, order: Number(e.target.value) })} />
+              </label>
+            </>
+          )}
+          <div className="modal-footer">
+            <button type="button" className="secondary-button" onClick={closeModal}>Hủy</button>
+            <button type="submit" className="primary-button">Lưu lại</button>
+          </div>
+        </form>
+      </Modal>
+
       {view === 'bank' ? (
         <QuestionBankView
           topics={topics}
@@ -450,8 +468,6 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
           selectedSet={selectedSet}
           stats={stats}
           dashboardStats={dashboardStats}
-          topicForm={topicForm}
-          setForm={setForm}
           loading={loading}
           onTopicChange={setSelectedTopicId}
           onSetChange={setSelectedSetId}
@@ -459,34 +475,21 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
           onSearchChange={setQuestionSearch}
           onRefresh={() => refreshAll().catch(err => showMessage(err instanceof Error ? err.message : 'Không thể làm mới dữ liệu', 'error'))}
           onCreateQuestion={startCreateQuestion}
-          onTopicFormChange={setTopicForm}
-          onSetFormChange={setSetForm}
-          onCreateTopic={createTopic}
-          onCreateSet={createSet}
-          onEditTopic={editTopic}
-          onEditSet={editSet}
-          onEditQuestion={editQuestion}
+          onAddTopicClick={() => openModal('TOPIC_CREATE')}
+          onAddSetClick={() => openModal('SET_CREATE')}
+          onEditTopic={topic => openModal('TOPIC_EDIT', topic)}
+          onEditSet={set => openModal('SET_EDIT', set)}
+          onEditQuestion={startCreateQuestion}
           onArchiveTopic={topic => action(() => api(`/api/admin/quiz/topics/${topic.id}`, { method: 'DELETE' }), 'Đã lưu trữ chủ đề')}
           onArchiveSet={set => action(() => api(`/api/admin/quiz/sets/${set.id}`, { method: 'DELETE' }), 'Đã lưu trữ bộ câu hỏi')}
           onArchiveQuestion={question => action(() => api(`/api/admin/quiz/questions/${question.id}`, { method: 'DELETE' }), 'Đã lưu trữ câu hỏi')}
-          onPublishSet={set => action(() => api(`/api/admin/quiz/sets/${set.id}/publish`, { method: 'POST' }), 'Đã xuất bản bộ câu hỏi')}
-          onCloseSet={set => action(() => api(`/api/admin/quiz/sets/${set.id}/close`, { method: 'POST' }), 'Đã đóng bộ câu hỏi')}
-          onCloneSet={set => action(() => api(`/api/admin/quiz/sets/${set.id}/clone`, { method: 'POST' }), 'Đã tạo bản nháp mới')}
         />
       ) : (
-        <QuestionEditorView
-          topics={topics}
-          sets={filteredSets}
-          selectedTopicId={selectedTopicId}
-          selectedSetId={selectedSetId}
+        <SetEditorView
           selectedSet={selectedSet}
-          draft={questionDraft}
-          onTopicChange={setSelectedTopicId}
-          onSetChange={setSelectedSetId}
-          onDraftChange={setQuestionDraft}
+          initialQuestions={questions}
           onCancel={() => navigateView('bank', 'replace')}
-          onSave={() => saveQuestion(false)}
-          onSaveAndPublish={() => saveQuestion(true)}
+          onSave={saveBatchQuestions}
         />
       )}
     </AdminShell>
@@ -499,7 +502,10 @@ function AdminShell({
   onNavigate,
   onLogout,
   onCreateQuestion,
-  onSaveQuestion
+  onSaveQuestion,
+  onCloneClick,
+  onCloseClick,
+  onPublishClick
 }: {
   children: React.ReactNode;
   view: ViewMode;
@@ -507,6 +513,9 @@ function AdminShell({
   onLogout: () => void;
   onCreateQuestion: () => void;
   onSaveQuestion?: () => void;
+  onCloneClick?: () => void;
+  onCloseClick?: () => void;
+  onPublishClick?: () => void;
 }) {
   const pageTitle = view === 'bank' ? 'Ngân hàng câu hỏi' : 'Thêm câu hỏi mới';
   return (
@@ -535,11 +544,13 @@ function AdminShell({
 
         <div className="sidebar-user">
           <div className="avatar">NA</div>
-          <div>
+          <div className="user-info">
             <strong>Nguyễn Văn An</strong>
             <span>Quản trị viên</span>
           </div>
-          <button className="icon-button ghost" onClick={onLogout} aria-label="Đăng xuất"><LogOut size={20} /></button>
+          <button className="logout-button" onClick={onLogout} title="Đăng xuất">
+            <LogOut size={18} />
+          </button>
         </div>
       </aside>
 
@@ -557,7 +568,12 @@ function AdminShell({
           <div className="topbar-actions">
             <button className="icon-button notify" aria-label="Thông báo"><Bell size={21} /></button>
             {view === 'bank' ? (
-              <button className="primary-button" onClick={onCreateQuestion}><Plus size={20} /> Thêm câu hỏi mới</button>
+              <>
+                <button className="secondary-button" onClick={onCloneClick}>Tạo bản mới</button>
+                <button className="secondary-button danger" onClick={onCloseClick}>Đóng bộ</button>
+                <button className="primary-button strong" onClick={onPublishClick}>Xuất bản</button>
+                <button className="primary-button" onClick={onCreateQuestion}><Plus size={20} /> Thêm câu hỏi</button>
+              </>
             ) : (
               <>
                 <button className="secondary-button" onClick={() => onNavigate('bank', 'replace')}>Hủy</button>
@@ -584,8 +600,6 @@ function QuestionBankView({
   selectedSet,
   stats,
   dashboardStats,
-  topicForm,
-  setForm,
   loading,
   onTopicChange,
   onSetChange,
@@ -593,19 +607,14 @@ function QuestionBankView({
   onSearchChange,
   onRefresh,
   onCreateQuestion,
-  onTopicFormChange,
-  onSetFormChange,
-  onCreateTopic,
-  onCreateSet,
+  onAddTopicClick,
+  onAddSetClick,
   onEditTopic,
   onEditSet,
   onEditQuestion,
   onArchiveTopic,
   onArchiveSet,
-  onArchiveQuestion,
-  onPublishSet,
-  onCloseSet,
-  onCloneSet
+  onArchiveQuestion
 }: {
   topics: Topic[];
   sets: QuizSet[];
@@ -618,8 +627,6 @@ function QuestionBankView({
   selectedSet?: QuizSet;
   stats: Stats | null;
   dashboardStats: ReadonlyArray<{ label: string; value: string; icon: LucideIcon; accent: string }>;
-  topicForm: { title: string; description: string; order: number };
-  setForm: { title: string; description: string; timeLimit: number; order: number };
   loading: boolean;
   onTopicChange: (value: string) => void;
   onSetChange: (value: string) => void;
@@ -627,19 +634,14 @@ function QuestionBankView({
   onSearchChange: (value: string) => void;
   onRefresh: () => void;
   onCreateQuestion: () => void;
-  onTopicFormChange: (value: { title: string; description: string; order: number }) => void;
-  onSetFormChange: (value: { title: string; description: string; timeLimit: number; order: number }) => void;
-  onCreateTopic: (event: React.FormEvent) => void;
-  onCreateSet: (event: React.FormEvent) => void;
+  onAddTopicClick: () => void;
+  onAddSetClick: () => void;
   onEditTopic: (topic: Topic) => void;
   onEditSet: (set: QuizSet) => void;
   onEditQuestion: (question: Question) => void;
   onArchiveTopic: (topic: Topic) => void;
   onArchiveSet: (set: QuizSet) => void;
   onArchiveQuestion: (question: Question) => void;
-  onPublishSet: (set: QuizSet) => void;
-  onCloseSet: (set: QuizSet) => void;
-  onCloneSet: (set: QuizSet) => void;
 }) {
   return (
     <div className="bank-layout">
@@ -717,20 +719,6 @@ function QuestionBankView({
           ) : <EmptyState title="Chưa có bộ câu hỏi" description="Hãy tạo hoặc chọn một bộ câu hỏi trước khi thêm nội dung." />}
         </section>
 
-        {selectedSet && (
-          <section className="guide-banner">
-            <div>
-              <p className="eyebrow">Mẹo nhỏ</p>
-              <h2>Hướng dẫn tạo câu hỏi chuẩn</h2>
-              <p>Đảm bảo câu hỏi rõ ràng, đáp án đúng duy nhất và nội dung phù hợp với kiến thức chuyển đổi số.</p>
-            </div>
-            <div className="banner-actions">
-              <button className="light-button" onClick={() => onCloneSet(selectedSet)}>Tạo bản mới</button>
-              <button className="light-button" onClick={() => onCloseSet(selectedSet)}>Đóng</button>
-              <button className="light-button strong" onClick={() => onPublishSet(selectedSet)}>Xuất bản</button>
-            </div>
-          </section>
-        )}
       </section>
 
       <aside className="side-column">
@@ -740,12 +728,8 @@ function QuestionBankView({
               <p className="eyebrow">Danh mục</p>
               <h2>Chủ đề</h2>
             </div>
+            <button className="icon-button" onClick={onAddTopicClick} aria-label="Thêm chủ đề"><Plus size={18} /></button>
           </div>
-          <form className="stack-form" onSubmit={onCreateTopic}>
-            <input placeholder="Tên chủ đề" value={topicForm.title} onChange={event => onTopicFormChange({ ...topicForm, title: event.target.value })} />
-            <textarea placeholder="Mô tả chủ đề" value={topicForm.description} onChange={event => onTopicFormChange({ ...topicForm, description: event.target.value })} />
-            <button className="secondary-button" type="submit"><Plus size={17} /> Thêm chủ đề</button>
-          </form>
           <div className="mini-list">
             {topics.map(topic => (
               <div className={topic.id === selectedTopicId ? 'mini-row selected' : 'mini-row'} key={topic.id}>
@@ -765,13 +749,8 @@ function QuestionBankView({
               <p className="eyebrow">Bộ câu hỏi</p>
               <h2>Thiết lập nhanh</h2>
             </div>
+            <button className="icon-button" onClick={onAddSetClick} aria-label="Thêm bộ câu hỏi"><Plus size={18} /></button>
           </div>
-          <form className="stack-form" onSubmit={onCreateSet}>
-            <input placeholder="Tiêu đề bộ câu hỏi" value={setForm.title} onChange={event => onSetFormChange({ ...setForm, title: event.target.value })} />
-            <textarea placeholder="Mô tả" value={setForm.description} onChange={event => onSetFormChange({ ...setForm, description: event.target.value })} />
-            <input type="number" min={30} value={setForm.timeLimit} onChange={event => onSetFormChange({ ...setForm, timeLimit: Number(event.target.value) })} />
-            <button className="secondary-button" type="submit"><Plus size={17} /> Thêm bộ</button>
-          </form>
           <div className="mini-list">
             {sets.map(set => (
               <div className={set.id === selectedSetId ? 'mini-row selected' : 'mini-row'} key={set.id}>
@@ -809,139 +788,133 @@ function QuestionBankView({
   );
 }
 
-function QuestionEditorView({
-  topics,
-  sets,
-  selectedTopicId,
-  selectedSetId,
+function SetEditorView({
   selectedSet,
-  draft,
-  onTopicChange,
-  onSetChange,
-  onDraftChange,
+  initialQuestions,
   onCancel,
-  onSave,
-  onSaveAndPublish
+  onSave
 }: {
-  topics: Topic[];
-  sets: QuizSet[];
-  selectedTopicId: string;
-  selectedSetId: string;
   selectedSet?: QuizSet;
-  draft: QuestionDraft;
-  onTopicChange: (value: string) => void;
-  onSetChange: (value: string) => void;
-  onDraftChange: (value: QuestionDraft) => void;
+  initialQuestions: Question[];
   onCancel: () => void;
-  onSave: () => void;
-  onSaveAndPublish: () => void;
+  onSave: (questions: QuestionDraft[], deletedIds: string[]) => void;
 }) {
-  const setOption = (index: number, content: string) => {
-    onDraftChange({
-      ...draft,
-      options: draft.options.map((option, optionIndex) => optionIndex === index ? { ...option, content } : option)
-    });
+  const [questions, setQuestions] = useState<QuestionDraft[]>(() => {
+    if (!initialQuestions || initialQuestions.length === 0) return [emptyQuestionDraft(1)];
+    return initialQuestions.map(q => ({
+      id: q.id,
+      content: q.content,
+      type: q.type,
+      points: q.points,
+      order: q.order,
+      explanation: q.explanation || '',
+      options: q.options.map(o => ({ id: o.id, content: o.content, isCorrect: o.isCorrect, order: o.order }))
+    }));
+  });
+  const [deletedIds, setDeletedIds] = useState<string[]>([]);
+  const [activeQuestionIndex, setActiveQuestionIndex] = useState<number>(0);
+
+  const addQuestion = () => {
+    setQuestions([...questions, emptyQuestionDraft(questions.length + 1)]);
+    setActiveQuestionIndex(questions.length);
   };
 
-  const setCorrect = (index: number) => {
-    onDraftChange({
-      ...draft,
-      options: draft.options.map((option, optionIndex) => ({ ...option, isCorrect: optionIndex === index }))
-    });
+  const removeQuestion = (index: number) => {
+    const q = questions[index];
+    if (q.id && !q.id.startsWith('draft-')) {
+      setDeletedIds([...deletedIds, q.id]);
+    }
+    const newQuestions = questions.filter((_, i) => i !== index);
+    setQuestions(newQuestions.length > 0 ? newQuestions : [emptyQuestionDraft(1)]);
+    setActiveQuestionIndex(Math.max(0, index - 1));
+  };
+
+  const updateQuestion = (index: number, updates: Partial<QuestionDraft>) => {
+    setQuestions(questions.map((q, i) => i === index ? { ...q, ...updates } : q));
+  };
+
+  const updateOption = (qIndex: number, oIndex: number, updates: Partial<Option>) => {
+    setQuestions(questions.map((q, i) => {
+      if (i !== qIndex) return q;
+      return { ...q, options: q.options.map((o, j) => j === oIndex ? { ...o, ...updates } : o) };
+    }));
+  };
+
+  const setCorrectOption = (qIndex: number, oIndex: number) => {
+    setQuestions(questions.map((q, i) => {
+      if (i !== qIndex) return q;
+      return { ...q, options: q.options.map((o, j) => ({ ...o, isCorrect: j === oIndex })) };
+    }));
+  };
+
+  const addOption = (qIndex: number) => {
+    setQuestions(questions.map((q, i) => {
+      if (i !== qIndex) return q;
+      return { ...q, options: [...q.options, { content: '', isCorrect: false }] };
+    }));
+  };
+  
+  const removeOption = (qIndex: number, oIndex: number) => {
+    setQuestions(questions.map((q, i) => {
+      if (i !== qIndex) return q;
+      return { ...q, options: q.options.filter((_, j) => j !== oIndex) };
+    }));
   };
 
   return (
-    <div className="editor-layout">
-      <section className="editor-side">
-        <div className="glass-card form-card">
-          <div className="card-title"><ClipboardList size={22} /><h2>Thông tin chủ đề</h2></div>
-          <label>
-            Chọn chủ đề
-            <Select value={selectedTopicId} onChange={onTopicChange} ariaLabel="Chọn chủ đề">
-              <option value="">Tất cả chủ đề</option>
-              {topics.map(topic => <option key={topic.id} value={topic.id}>{topic.title}</option>)}
-            </Select>
-          </label>
-          <label>
-            Bộ câu hỏi
-            <Select value={selectedSetId} onChange={onSetChange} ariaLabel="Chọn bộ câu hỏi">
-              {sets.length === 0 && <option value="">Chưa có bộ câu hỏi</option>}
-              {sets.map(set => <option key={set.id} value={set.id}>{set.title}</option>)}
-            </Select>
-          </label>
-        </div>
+    <div className="editor-list-layout">
+      <div className="set-header-card">
+        <input value={selectedSet?.title || ''} readOnly placeholder="Tiêu đề bộ câu hỏi" />
+        <textarea value={selectedSet?.description || ''} readOnly placeholder="Mô tả bộ câu hỏi" />
+      </div>
 
-        <div className="glass-card form-card">
-          <div className="card-title"><SlidersHorizontal size={22} /><h2>Cấu hình câu hỏi</h2></div>
-          <label>
-            Điểm số
-            <input type="number" min={1} value={draft.points} onChange={event => onDraftChange({ ...draft, points: Number(event.target.value) })} />
-          </label>
-          <label>
-            Thứ tự
-            <input type="number" min={0} value={draft.order} onChange={event => onDraftChange({ ...draft, order: Number(event.target.value) })} />
-          </label>
-          <div className="difficulty">
-            <span>Độ khó</span>
-            <i />
-            <i />
-            <i className="muted-bar" />
+      {questions.map((q, qIndex) => (
+        <div key={q.id || `draft-${qIndex}`} className={`question-block ${activeQuestionIndex === qIndex ? 'active' : ''}`} onClick={() => setActiveQuestionIndex(qIndex)}>
+          <div className="question-block-header">
+            <strong>Câu hỏi {qIndex + 1}</strong>
+            <button className="icon-button danger ghost" onClick={() => removeQuestion(qIndex)}><Trash2 size={18} /></button>
           </div>
-        </div>
-      </section>
-
-      <section className="editor-main">
-        <div className="glass-card form-card question-content-card">
-          <div className="card-title"><Edit size={22} /><h2>Nội dung câu hỏi</h2></div>
-          <div className="editor-toolbar" aria-hidden="true">
-            <strong>B</strong><em>I</em><u>U</u><span /> <BookOpen size={18} />
-          </div>
-          <textarea
-            className="question-textarea"
-            placeholder="Nhập câu hỏi của bạn tại đây..."
-            value={draft.content}
-            onChange={event => onDraftChange({ ...draft, content: event.target.value })}
+          <textarea 
+            className="question-input" 
+            placeholder="Nhập câu hỏi..." 
+            value={q.content} 
+            onChange={e => updateQuestion(qIndex, { content: e.target.value })} 
           />
-        </div>
-
-        <div className="glass-card form-card answers-card">
-          <div className="section-heading tight">
-            <div className="card-title"><CheckCircle size={22} /><h2>Danh sách đáp án</h2></div>
-            <button className="text-button" type="button"><Plus size={17} /> Thêm đáp án</button>
-          </div>
-          <div className="answer-list">
-            {draft.options.map((option, index) => (
-              <div className={option.isCorrect ? 'answer-row correct-answer' : 'answer-row'} key={index}>
-                <span className="answer-letter">{String.fromCharCode(65 + index)}</span>
-                <input placeholder={`Đáp án ${String.fromCharCode(65 + index)}`} value={option.content} onChange={event => setOption(index, event.target.value)} />
-                <label className="switch-label">
-                  <span>Đúng</span>
-                  <input type="radio" name="correct-answer" checked={option.isCorrect} onChange={() => setCorrect(index)} />
-                </label>
-                <button className="icon-button muted-action" type="button" aria-label="Đáp án cố định"><Trash2 size={18} /></button>
+          <div className="options-list" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {q.options.map((opt, oIndex) => (
+              <div className="option-row" key={opt.id || oIndex}>
+                <input 
+                  type="radio" 
+                  name={`correct-${qIndex}`} 
+                  checked={opt.isCorrect} 
+                  onChange={() => setCorrectOption(qIndex, oIndex)} 
+                />
+                <input 
+                  type="text" 
+                  placeholder={`Đáp án ${oIndex + 1}`} 
+                  value={opt.content} 
+                  onChange={e => updateOption(qIndex, oIndex, { content: e.target.value })} 
+                />
+                <button className="icon-button ghost muted-action" onClick={() => removeOption(qIndex, oIndex)}><X size={18} /></button>
               </div>
             ))}
           </div>
+          {activeQuestionIndex === qIndex && (
+            <div className="question-actions">
+              <button className="text-button" onClick={() => addOption(qIndex)}><Plus size={16} /> Thêm lựa chọn</button>
+            </div>
+          )}
         </div>
+      ))}
 
-        <div className="draft-note">
-          <div className="brand-mark soft"><BookOpen size={22} /></div>
-          <div>
-            <strong>Mẹo nhỏ</strong>
-            <p>Hãy đảm bảo câu hỏi mang tính giáo dục và dễ hiểu đối với mọi tầng lớp công dân.</p>
-          </div>
-          <div className="draft-status">
-            <span>Trạng thái soạn thảo</span>
-            <strong>{selectedSet ? statusLabel(selectedSet.status) : 'Nháp'}</strong>
-          </div>
-        </div>
+      <div className="add-question-btn-container">
+        <button className="secondary-button" onClick={addQuestion}><Plus size={20} /> Thêm câu hỏi mới</button>
+      </div>
 
-        <footer className="editor-footer">
-          <button className="secondary-button" onClick={onCancel}><X size={18} /> Hủy thay đổi</button>
-          <button className="primary-button" onClick={onSaveAndPublish}><CheckCircle size={18} /> Lưu & Đăng tải</button>
-          <button className="primary-button" onClick={onSave}><Save size={18} /> Lưu câu hỏi</button>
-        </footer>
-      </section>
+      <footer className="editor-footer" style={{ position: 'sticky', bottom: '0', background: 'var(--surface-solid)', padding: '16px', borderRadius: '16px', boxShadow: '0 -4px 12px rgba(0,0,0,0.05)', zIndex: 10 }}>
+        <button className="secondary-button" onClick={onCancel}><X size={18} /> Hủy</button>
+        <button className="primary-button" onClick={() => onSave(questions, deletedIds)}><Save size={18} /> Lưu tất cả thay đổi</button>
+      </footer>
     </div>
   );
 }
@@ -1004,4 +977,20 @@ function Notice({ tone, message, onClose }: { tone: 'info' | 'error'; message: s
   );
 }
 
+function Modal({ isOpen, onClose, title, children }: { isOpen: boolean; onClose: () => void; title: string; children: React.ReactNode }) {
+  if (!isOpen) return null;
+  return (
+    <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal-content">
+        <div className="modal-header">
+          <h2>{title}</h2>
+          <button className="icon-button ghost" onClick={onClose}><X size={20} /></button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 createRoot(document.getElementById('root')!).render(<App />);
+

@@ -59,6 +59,7 @@ router.post('/sets/:id/publish', quizController.publishSet);
 router.post('/sets/:id/close', quizController.closeSet);
 router.post('/sets/:id/clone', quizController.cloneSet);
 router.get('/sets/:id/stats', quizController.getSetStats);
+router.post('/sets/:id/questions/batch', quizController.batchSaveQuestions);
 
 router.get('/questions', quizController.getAdminQuestions);
 router.post('/questions', validate(questionCreateSchema), quizController.createQuestion);

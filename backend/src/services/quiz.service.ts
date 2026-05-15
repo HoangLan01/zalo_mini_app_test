@@ -409,3 +409,79 @@ export const cloneSetToDraft = async (id: string) => {
     }
   });
 };
+
+export const batchSaveQuestions = async (quizSetId: string, data: {
+  questions: {
+    id?: string;
+    content: string;
+    type: 'MULTIPLE_CHOICE' | 'TRUE_FALSE';
+    points: number;
+    order?: number;
+    explanation?: string;
+    options: { content: string; order?: number; isCorrect: boolean }[];
+  }[];
+  deletedIds: string[];
+}) => {
+  return prisma.$transaction(async tx => {
+    if (data.deletedIds.length > 0) {
+      await tx.quizQuestion.updateMany({
+        where: { id: { in: data.deletedIds } },
+        data: { archivedAt: new Date() }
+      });
+    }
+
+    const results = [];
+    for (const q of data.questions) {
+      const qId = (q.id && q.id.startsWith('draft-')) ? undefined : q.id;
+      if (qId) {
+        if (q.options) {
+          await tx.quizOption.updateMany({
+            where: { questionId: qId, archivedAt: null },
+            data: { archivedAt: new Date() }
+          });
+        }
+        const updated = await tx.quizQuestion.update({
+          where: { id: qId },
+          data: {
+            content: q.content,
+            type: q.type,
+            points: q.points,
+            order: q.order,
+            explanation: q.explanation,
+            options: q.options ? {
+              create: q.options.map((opt, idx) => ({
+                content: opt.content,
+                order: opt.order ?? idx,
+                isCorrect: opt.isCorrect
+              }))
+            } : undefined
+          },
+          include: { options: { where: activeWhere, orderBy: { order: 'asc' } } }
+        });
+        results.push(updated);
+      } else {
+        const created = await tx.quizQuestion.create({
+          data: {
+            quizSetId,
+            content: q.content,
+            type: q.type,
+            points: q.points,
+            order: q.order || 0,
+            explanation: q.explanation,
+            options: {
+              create: q.options.map((opt, idx) => ({
+                content: opt.content,
+                order: opt.order ?? idx,
+                isCorrect: opt.isCorrect
+              }))
+            }
+          },
+          include: { options: { orderBy: { order: 'asc' } } }
+        });
+        results.push(created);
+      }
+    }
+    return results;
+  });
+};
+
