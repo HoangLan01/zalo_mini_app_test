@@ -9,6 +9,7 @@ import {
   ClipboardList,
   Edit,
   FileQuestion,
+  HelpCircle,
   LayoutDashboard,
   ListFilter,
   LogOut,
@@ -60,7 +61,7 @@ type Stats = {
   averageTimeTaken: number;
   leaderboard: Array<{ id: string; score: number; maxScore: number; timeTaken: number; user: { displayName: string } }>;
 };
-type ViewMode = 'bank' | 'create';
+type ViewMode = 'bank' | 'create' | 'guide';
 type NavigationMode = 'push' | 'replace';
 type QuestionDraft = {
   id?: string;
@@ -123,13 +124,18 @@ const formatSeconds = (value: number) => {
 };
 
 const getViewFromLocation = (): ViewMode => {
-  return new URLSearchParams(window.location.search).get('view') === 'create' ? 'create' : 'bank';
+  const v = new URLSearchParams(window.location.search).get('view');
+  if (v === 'create') return 'create';
+  if (v === 'guide') return 'guide';
+  return 'bank';
 };
 
 const buildViewUrl = (nextView: ViewMode) => {
   const url = new URL(window.location.href);
   if (nextView === 'create') {
     url.searchParams.set('view', 'create');
+  } else if (nextView === 'guide') {
+    url.searchParams.set('view', 'guide');
   } else {
     url.searchParams.delete('view');
   }
@@ -484,6 +490,8 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
           onArchiveSet={set => action(() => api(`/api/admin/quiz/sets/${set.id}`, { method: 'DELETE' }), 'Đã lưu trữ bộ câu hỏi')}
           onArchiveQuestion={question => action(() => api(`/api/admin/quiz/questions/${question.id}`, { method: 'DELETE' }), 'Đã lưu trữ câu hỏi')}
         />
+      ) : view === 'guide' ? (
+        <UserGuideView />
       ) : (
         <SetEditorView
           selectedSet={selectedSet}
@@ -517,7 +525,7 @@ function AdminShell({
   onCloseClick?: () => void;
   onPublishClick?: () => void;
 }) {
-  const pageTitle = view === 'bank' ? 'Ngân hàng câu hỏi' : 'Thêm câu hỏi mới';
+  const pageTitle = view === 'bank' ? 'Ngân hàng câu hỏi' : view === 'guide' ? 'Hướng dẫn sử dụng' : 'Thêm câu hỏi mới';
   return (
     <main className="admin-layout">
       <aside className="sidebar">
@@ -532,12 +540,15 @@ function AdminShell({
         <nav className="sidebar-nav" aria-label="Điều hướng quản trị">
           <button className="nav-item"><LayoutDashboard size={20} /> Tổng quan</button>
           <p>Quản lý nội dung</p>
-          <button className={view === 'bank' ? 'nav-item active' : 'nav-item'} onClick={() => onNavigate('bank', 'replace')}>
+          <button className={view === 'bank' ? 'nav-item active' : 'nav-item'} onClick={() => onNavigate('bank')}>
             <FileQuestion size={20} /> Chuyển đổi số
           </button>
           <button className="nav-item"><BookOpen size={20} /> Tin tức & Sự kiện</button>
           <button className="nav-item"><ClipboardList size={20} /> Thủ tục hành chính</button>
           <p>Hệ thống</p>
+          <button className={view === 'guide' ? 'nav-item active' : 'nav-item'} onClick={() => onNavigate('guide')}>
+            <HelpCircle size={20} /> Hướng dẫn sử dụng
+          </button>
           <button className="nav-item"><Shield size={20} /> Người dùng</button>
           <button className="nav-item"><Settings size={20} /> Cài đặt</button>
         </nav>
@@ -560,7 +571,8 @@ function AdminShell({
             <div className="breadcrumb">
               <span>Kiến thức Chuyển đổi số</span>
               <span>/</span>
-              <button onClick={() => onNavigate('bank', 'replace')}>Quản lý câu hỏi</button>
+              <button onClick={() => onNavigate('bank')}>Quản lý câu hỏi</button>
+              {view === 'guide' && <><span>/</span><strong>Hướng dẫn sử dụng</strong></>}
               {view === 'create' && <><span>/</span><strong>Thêm câu hỏi mới</strong></>}
             </div>
             <h1>{pageTitle}</h1>
@@ -574,6 +586,8 @@ function AdminShell({
                 <button className="primary-button strong" onClick={onPublishClick}>Xuất bản</button>
                 <button className="primary-button" onClick={onCreateQuestion}><Plus size={20} /> Thêm câu hỏi</button>
               </>
+            ) : view === 'guide' ? (
+              <button className="primary-button" onClick={() => onNavigate('bank')}>Quay lại quản lý</button>
             ) : (
               <>
                 <button className="secondary-button" onClick={() => onNavigate('bank', 'replace')}>Hủy</button>
@@ -915,6 +929,130 @@ function SetEditorView({
         <button className="secondary-button" onClick={onCancel}><X size={18} /> Hủy</button>
         <button className="primary-button" onClick={() => onSave(questions, deletedIds)}><Save size={18} /> Lưu tất cả thay đổi</button>
       </footer>
+    </div>
+  );
+}
+
+function UserGuideView() {
+  return (
+    <div className="guide-layout">
+      <section className="glass-card guide-section hero-section">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Luồng nghiệp vụ</p>
+            <h2>Quy trình quản lý nội dung</h2>
+          </div>
+          <div className="guide-icon-badge"><HelpCircle size={28} /></div>
+        </div>
+        <div className="guide-content">
+          <p className="guide-intro">
+            Hệ thống được thiết kế theo cấu trúc phân cấp 3 lớp để tối ưu hóa việc quản lý và tổ chức dữ liệu bài thi.
+          </p>
+          <div className="guide-steps">
+            <div className="step">
+              <span className="step-number">1</span>
+              <div className="step-body">
+                <strong>Chủ đề (Topic)</strong>
+                <p>Danh mục cấp cao nhất để phân loại bài thi.</p>
+              </div>
+            </div>
+            <div className="step-arrow">→</div>
+            <div className="step">
+              <span className="step-number">2</span>
+              <div className="step-body">
+                <strong>Bộ câu hỏi (Quiz Set)</strong>
+                <p>Các bài thi cụ thể nằm trong chủ đề.</p>
+              </div>
+            </div>
+            <div className="step-arrow">→</div>
+            <div className="step">
+              <span className="step-number">3</span>
+              <div className="step-body">
+                <strong>Câu hỏi (Question)</strong>
+                <p>Nội dung chi tiết của từng bài thi.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div className="guide-grid">
+        <section className="glass-card guide-section">
+          <div className="card-header">
+            <div className="card-icon blue"><Plus size={20} /></div>
+            <h3>Thêm mới dữ liệu</h3>
+          </div>
+          <div className="guide-list">
+            <div className="list-item">
+              <span className="item-label">Chủ đề</span>
+              <span className="item-desc">Nhấn dấu cộng <Plus size={13} className="inline-icon" /> tại cột "Chủ đề" bên phải màn hình.</span>
+            </div>
+            <div className="list-item">
+              <span className="item-label">Bộ câu hỏi</span>
+              <span className="item-desc">Nhấn dấu cộng <Plus size={13} className="inline-icon" /> tại cột "Thiết lập nhanh" bên phải.</span>
+            </div>
+            <div className="list-item">
+              <span className="item-label">Câu hỏi</span>
+              <span className="item-desc">Chọn bộ câu hỏi, sau đó nhấn "Thêm câu hỏi" ở góc trên bên phải.</span>
+            </div>
+          </div>
+        </section>
+
+        <section className="glass-card guide-section">
+          <div className="card-header">
+            <div className="card-icon purple"><Edit size={20} /></div>
+            <h3>Chỉnh sửa & Lưu</h3>
+          </div>
+          <div className="guide-list">
+            <div className="list-item">
+              <span className="item-label">Chỉnh sửa</span>
+              <span className="item-desc">Sử dụng icon cây bút <Edit size={13} className="inline-icon" /> cạnh mỗi mục để thay đổi.</span>
+            </div>
+            <div className="list-item">
+              <span className="item-label">Lưu dữ liệu</span>
+              <span className="item-desc">Tại trình soạn thảo, nhấn "Lưu tất cả thay đổi" để cập nhật hệ thống.</span>
+            </div>
+          </div>
+        </section>
+
+        <section className="glass-card guide-section">
+          <div className="card-header">
+            <div className="card-icon green"><CheckCircle size={20} /></div>
+            <h3>Xuất bản & Trạng thái</h3>
+          </div>
+          <div className="guide-list">
+            <div className="list-item">
+              <span className="item-label">Nháp</span>
+              <span className="item-desc">Trạng thái mặc định, người dùng chưa thể thấy nội dung.</span>
+            </div>
+            <div className="list-item">
+              <span className="item-label">Hoạt động</span>
+              <span className="item-desc">Nhấn "Xuất bản" để bài thi hiển thị trên ứng dụng Zalo Mini App.</span>
+            </div>
+            <div className="list-item">
+              <span className="item-label">Đã đóng</span>
+              <span className="item-desc">Dừng bài thi tạm thời, không cho phép người dùng tham gia mới.</span>
+            </div>
+          </div>
+        </section>
+
+        <section className="glass-card guide-section">
+          <div className="card-header">
+            <div className="card-icon orange"><Trash2 size={20} /></div>
+            <h3>Lưu trữ & Xoá</h3>
+          </div>
+          <div className="guide-list">
+            <div className="list-item">
+              <span className="item-label">Lưu trữ</span>
+              <span className="item-desc">Nhấn icon <Trash2 size={13} className="inline-icon" /> để ẩn nội dung khỏi danh sách chính.</span>
+            </div>
+            <div className="list-item">
+              <span className="item-label">Lưu ý</span>
+              <span className="item-desc">Hệ thống sử dụng cơ chế xoá mềm, có thể khôi phục lại khi cần.</span>
+            </div>
+          </div>
+        </section>
+      </div>
     </div>
   );
 }
