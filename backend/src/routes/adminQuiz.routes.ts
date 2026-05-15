@@ -46,6 +46,8 @@ const questionUpdateSchema = questionCreateSchema.omit({ quizSetId: true }).part
 
 router.use(authenticateToken, requireAdmin);
 
+router.get('/dashboard', quizController.getDashboardStats);
+
 router.get('/topics', quizController.getAdminTopics);
 router.post('/topics', validate(topicCreateSchema), quizController.createTopic);
 router.patch('/topics/:id', validate(topicUpdateSchema), quizController.updateTopic);

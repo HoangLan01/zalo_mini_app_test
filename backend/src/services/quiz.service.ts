@@ -485,3 +485,90 @@ export const batchSaveQuestions = async (quizSetId: string, data: {
   });
 };
 
+export const getDashboardStats = async () => {
+  const fourteenDaysAgo = new Date();
+  fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 13);
+  fourteenDaysAgo.setHours(0, 0, 0, 0);
+
+  const [
+    totalUsers,
+    totalTopics,
+    totalSets,
+    totalAttempts,
+    statusGroups,
+    dailyRaw,
+    topUsersRaw,
+    recentAttempts
+  ] = await Promise.all([
+    prisma.user.count(),
+    prisma.quizTopic.count({ where: { archivedAt: null } }),
+    prisma.quizSet.count({ where: { archivedAt: null } }),
+    prisma.quizAttempt.count({ where: { status: { in: ['SUBMITTED', 'EXPIRED'] } } }),
+
+    prisma.quizSet.groupBy({
+      by: ['status'],
+      _count: true,
+      where: { archivedAt: null }
+    }),
+
+    prisma.$queryRaw<{ date: string; count: bigint }[]>`
+      SELECT DATE("submittedAt") as date, COUNT(*)::bigint as count
+      FROM quiz_attempts
+      WHERE status IN ('SUBMITTED', 'EXPIRED')
+        AND "submittedAt" >= ${fourteenDaysAgo}
+      GROUP BY DATE("submittedAt")
+      ORDER BY date ASC
+    `,
+
+    prisma.$queryRaw<{ userId: string; displayName: string; avatarUrl: string | null; totalScore: bigint; attemptCount: bigint }[]>`
+      SELECT u.id as "userId", u."displayName", u."avatarUrl",
+             SUM(a.score)::bigint as "totalScore",
+             COUNT(a.id)::bigint as "attemptCount"
+      FROM quiz_attempts a
+      JOIN users u ON u.id = a."userId"
+      WHERE a.status IN ('SUBMITTED', 'EXPIRED')
+      GROUP BY u.id, u."displayName", u."avatarUrl"
+      ORDER BY "totalScore" DESC, "attemptCount" DESC
+      LIMIT 10
+    `,
+
+    prisma.quizAttempt.findMany({
+      where: { status: { in: ['SUBMITTED', 'EXPIRED'] } },
+      orderBy: { submittedAt: 'desc' },
+      take: 10,
+      select: {
+        id: true,
+        score: true,
+        maxScore: true,
+        timeTaken: true,
+        submittedAt: true,
+        user: { select: { displayName: true, avatarUrl: true } },
+        quizSet: { select: { title: true } }
+      }
+    })
+  ]);
+
+  // Fill missing days in the 14-day range
+  const dailyMap = new Map(dailyRaw.map(r => [r.date.toString().slice(0, 10), Number(r.count)]));
+  const dailyAttempts: { date: string; count: number }[] = [];
+  for (let i = 0; i < 14; i++) {
+    const d = new Date(fourteenDaysAgo);
+    d.setDate(d.getDate() + i);
+    const key = d.toISOString().slice(0, 10);
+    dailyAttempts.push({ date: key, count: dailyMap.get(key) || 0 });
+  }
+
+  return {
+    summary: { totalUsers, totalTopics, totalSets, totalAttempts },
+    dailyAttempts,
+    statusDistribution: statusGroups.map(g => ({ status: g.status, count: g._count })),
+    topUsers: topUsersRaw.map(u => ({
+      userId: u.userId,
+      displayName: u.displayName,
+      avatarUrl: u.avatarUrl,
+      totalScore: Number(u.totalScore),
+      attemptCount: Number(u.attemptCount)
+    })),
+    recentAttempts
+  };
+};

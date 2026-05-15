@@ -1,11 +1,13 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
+  Award,
   Bell,
   BookOpen,
   Building2,
   CheckCircle,
   ChevronDown,
+  Clock,
   ClipboardList,
   Edit,
   FileQuestion,
@@ -21,6 +23,8 @@ import {
   Shield,
   SlidersHorizontal,
   Trash2,
+  TrendingUp,
+  Users,
   X
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -61,7 +65,14 @@ type Stats = {
   averageTimeTaken: number;
   leaderboard: Array<{ id: string; score: number; maxScore: number; timeTaken: number; user: { displayName: string } }>;
 };
-type ViewMode = 'bank' | 'create' | 'guide';
+type ViewMode = 'dashboard' | 'bank' | 'create' | 'guide';
+type DashboardData = {
+  summary: { totalUsers: number; totalTopics: number; totalSets: number; totalAttempts: number };
+  dailyAttempts: { date: string; count: number }[];
+  statusDistribution: { status: string; count: number }[];
+  topUsers: { userId: string; displayName: string; avatarUrl: string | null; totalScore: number; attemptCount: number }[];
+  recentAttempts: { id: string; score: number; maxScore: number; timeTaken: number; submittedAt: string; user: { displayName: string; avatarUrl: string | null }; quizSet: { title: string } }[];
+};
 type NavigationMode = 'push' | 'replace';
 type QuestionDraft = {
   id?: string;
@@ -127,17 +138,16 @@ const getViewFromLocation = (): ViewMode => {
   const v = new URLSearchParams(window.location.search).get('view');
   if (v === 'create') return 'create';
   if (v === 'guide') return 'guide';
-  return 'bank';
+  if (v === 'bank') return 'bank';
+  return 'dashboard';
 };
 
 const buildViewUrl = (nextView: ViewMode) => {
   const url = new URL(window.location.href);
-  if (nextView === 'create') {
-    url.searchParams.set('view', 'create');
-  } else if (nextView === 'guide') {
-    url.searchParams.set('view', 'guide');
-  } else {
+  if (nextView === 'dashboard') {
     url.searchParams.delete('view');
+  } else {
+    url.searchParams.set('view', nextView);
   }
   return `${url.pathname}${url.search}${url.hash}`;
 };
@@ -209,6 +219,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   const [modalState, setModalState] = useState<{ type: 'TOPIC_CREATE' | 'TOPIC_EDIT' | 'SET_CREATE' | 'SET_EDIT' | 'SET_PUBLISH' | 'SET_CLOSE' | 'SET_CLONE' | null; payload?: any }>({ type: null });
   const [modalForm, setModalForm] = useState({ title: '', description: '', timeLimit: 300, order: 0, setId: '' });
   const [stats, setStats] = useState<Stats | null>(null);
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
 
   const selectedSet = useMemo(() => sets.find(item => item.id === selectedSetId), [sets, selectedSetId]);
   const filteredSets = useMemo(
@@ -296,6 +307,14 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   useEffect(() => {
     refreshAll().catch(err => showMessage(err instanceof Error ? err.message : 'Không thể tải dữ liệu', 'error'));
   }, []);
+
+  useEffect(() => {
+    if (view === 'dashboard') {
+      api<DashboardData>('/api/admin/quiz/dashboard')
+        .then(setDashboardData)
+        .catch(err => showMessage(err instanceof Error ? err.message : 'Không thể tải dữ liệu tổng quan', 'error'));
+    }
+  }, [view]);
 
   useEffect(() => {
     const handlePopState = () => {
@@ -461,7 +480,9 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
         </form>
       </Modal>
 
-      {view === 'bank' ? (
+      {view === 'dashboard' ? (
+        <DashboardView data={dashboardData} />
+      ) : view === 'bank' ? (
         <QuestionBankView
           topics={topics}
           sets={sets}
@@ -525,7 +546,7 @@ function AdminShell({
   onCloseClick?: () => void;
   onPublishClick?: () => void;
 }) {
-  const pageTitle = view === 'bank' ? 'Ngân hàng câu hỏi' : view === 'guide' ? 'Hướng dẫn sử dụng' : 'Thêm câu hỏi mới';
+  const pageTitle = view === 'dashboard' ? 'Tổng quan' : view === 'bank' ? 'Ngân hàng câu hỏi' : view === 'guide' ? 'Hướng dẫn sử dụng' : 'Thêm câu hỏi mới';
   return (
     <main className="admin-layout">
       <aside className="sidebar">
@@ -538,9 +559,9 @@ function AdminShell({
         </div>
 
         <nav className="sidebar-nav" aria-label="Điều hướng quản trị">
-          <button className="nav-item"><LayoutDashboard size={20} /> Tổng quan</button>
+          <button className={view === 'dashboard' ? 'nav-item active' : 'nav-item'} onClick={() => onNavigate('dashboard')}><LayoutDashboard size={20} /> Tổng quan</button>
           <p>Quản lý nội dung</p>
-          <button className={view === 'bank' ? 'nav-item active' : 'nav-item'} onClick={() => onNavigate('bank')}>
+          <button className={(view === 'bank' || view === 'create') ? 'nav-item active' : 'nav-item'} onClick={() => onNavigate('bank')}>
             <FileQuestion size={20} /> Chuyển đổi số
           </button>
           <button className="nav-item"><BookOpen size={20} /> Tin tức & Sự kiện</button>
@@ -569,17 +590,25 @@ function AdminShell({
         <header className="topbar">
           <div>
             <div className="breadcrumb">
-              <span>Kiến thức Chuyển đổi số</span>
-              <span>/</span>
-              <button onClick={() => onNavigate('bank')}>Quản lý câu hỏi</button>
-              {view === 'guide' && <><span>/</span><strong>Hướng dẫn sử dụng</strong></>}
-              {view === 'create' && <><span>/</span><strong>Thêm câu hỏi mới</strong></>}
+              {view === 'dashboard' ? (
+                <strong>Tổng quan hệ thống</strong>
+              ) : (
+                <>
+                  <span>Kiến thức Chuyển đổi số</span>
+                  <span>/</span>
+                  <button onClick={() => onNavigate('bank')}>Quản lý câu hỏi</button>
+                  {view === 'guide' && <><span>/</span><strong>Hướng dẫn sử dụng</strong></>}
+                  {view === 'create' && <><span>/</span><strong>Thêm câu hỏi mới</strong></>}
+                </>
+              )}
             </div>
             <h1>{pageTitle}</h1>
           </div>
           <div className="topbar-actions">
             <button className="icon-button notify" aria-label="Thông báo"><Bell size={21} /></button>
-            {view === 'bank' ? (
+            {view === 'dashboard' ? (
+              null
+            ) : view === 'bank' ? (
               <>
                 <button className="secondary-button" onClick={onCloneClick}>Tạo bản mới</button>
                 <button className="secondary-button danger" onClick={onCloseClick}>Đóng bộ</button>
@@ -929,6 +958,248 @@ function SetEditorView({
         <button className="secondary-button" onClick={onCancel}><X size={18} /> Hủy</button>
         <button className="primary-button" onClick={() => onSave(questions, deletedIds)}><Save size={18} /> Lưu tất cả thay đổi</button>
       </footer>
+    </div>
+  );
+}
+
+
+function DashboardView({ data }: { data: DashboardData | null }) {
+  const lineRef = useRef<HTMLCanvasElement>(null);
+  const pieRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    if (!data || !lineRef.current) return;
+    const canvas = lineRef.current;
+    const ctx = canvas.getContext('2d')!;
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    const w = rect.width, h = rect.height;
+    const pad = { top: 30, right: 20, bottom: 46, left: 48 };
+    const cw = w - pad.left - pad.right;
+    const ch = h - pad.top - pad.bottom;
+    const points = data.dailyAttempts;
+    const maxVal = Math.max(...points.map(p => p.count), 1);
+    const yTicks = 5;
+
+    ctx.clearRect(0, 0, w, h);
+
+    // Grid lines and Y labels
+    ctx.strokeStyle = '#edf0f6';
+    ctx.fillStyle = '#8d93a5';
+    ctx.font = '12px Inter, system-ui';
+    ctx.textAlign = 'right';
+    for (let i = 0; i <= yTicks; i++) {
+      const y = pad.top + ch - (i / yTicks) * ch;
+      ctx.beginPath();
+      ctx.moveTo(pad.left, y);
+      ctx.lineTo(w - pad.right, y);
+      ctx.stroke();
+      ctx.fillText(String(Math.round((maxVal * i) / yTicks)), pad.left - 10, y + 4);
+    }
+
+    // X labels
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#8d93a5';
+    points.forEach((p, i) => {
+      const x = pad.left + (i / (points.length - 1 || 1)) * cw;
+      const label = p.date.slice(5); // MM-DD
+      if (i % 2 === 0 || points.length <= 7) {
+        ctx.fillText(label, x, h - pad.bottom + 22);
+      }
+    });
+
+    // Gradient fill
+    const grad = ctx.createLinearGradient(0, pad.top, 0, pad.top + ch);
+    grad.addColorStop(0, 'rgba(0, 82, 204, 0.18)');
+    grad.addColorStop(1, 'rgba(0, 82, 204, 0)');
+    ctx.beginPath();
+    points.forEach((p, i) => {
+      const x = pad.left + (i / (points.length - 1 || 1)) * cw;
+      const y = pad.top + ch - (p.count / maxVal) * ch;
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.lineTo(pad.left + cw, pad.top + ch);
+    ctx.lineTo(pad.left, pad.top + ch);
+    ctx.closePath();
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // Line
+    ctx.beginPath();
+    ctx.strokeStyle = '#0052cc';
+    ctx.lineWidth = 2.5;
+    ctx.lineJoin = 'round';
+    points.forEach((p, i) => {
+      const x = pad.left + (i / (points.length - 1 || 1)) * cw;
+      const y = pad.top + ch - (p.count / maxVal) * ch;
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    // Dots
+    points.forEach((p, i) => {
+      const x = pad.left + (i / (points.length - 1 || 1)) * cw;
+      const y = pad.top + ch - (p.count / maxVal) * ch;
+      ctx.beginPath();
+      ctx.arc(x, y, 4, 0, Math.PI * 2);
+      ctx.fillStyle = '#fff';
+      ctx.fill();
+      ctx.strokeStyle = '#0052cc';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    });
+  }, [data]);
+
+  useEffect(() => {
+    if (!data || !pieRef.current) return;
+    const canvas = pieRef.current;
+    const ctx = canvas.getContext('2d')!;
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    const size = Math.min(rect.width, rect.height);
+    const cx = rect.width / 2, cy = rect.height / 2;
+    const r = size / 2 - 24;
+    const items = data.statusDistribution;
+    const total = items.reduce((s, i) => s + i.count, 0) || 1;
+    const colors: Record<string, string> = {
+      DRAFT: '#8d93a5', PUBLISHED: '#0f9f6e', CLOSED: '#a33500', ARCHIVED: '#7658d8'
+    };
+    const labels: Record<string, string> = {
+      DRAFT: 'Nháp', PUBLISHED: 'Hoạt động', CLOSED: 'Đã đóng', ARCHIVED: 'Lưu trữ'
+    };
+
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    let angle = -Math.PI / 2;
+    items.forEach(item => {
+      const sweep = (item.count / total) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.arc(cx, cy, r, angle, angle + sweep);
+      ctx.closePath();
+      ctx.fillStyle = colors[item.status] || '#ccc';
+      ctx.fill();
+      angle += sweep;
+    });
+
+    // Inner circle (donut)
+    ctx.beginPath();
+    ctx.arc(cx, cy, r * 0.58, 0, Math.PI * 2);
+    ctx.fillStyle = '#fff';
+    ctx.fill();
+
+    // Center text
+    ctx.fillStyle = '#191b23';
+    ctx.font = 'bold 28px Inter, system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText(String(total), cx, cy + 4);
+    ctx.font = '12px Inter, system-ui';
+    ctx.fillStyle = '#8d93a5';
+    ctx.fillText('bộ câu hỏi', cx, cy + 22);
+
+    // Legend
+    const legendY = rect.height - 20;
+    const legendW = items.length * 110;
+    let lx = (rect.width - legendW) / 2;
+    ctx.font = '13px Inter, system-ui';
+    items.forEach(item => {
+      ctx.fillStyle = colors[item.status] || '#ccc';
+      ctx.beginPath();
+      ctx.arc(lx + 6, legendY, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#606575';
+      ctx.textAlign = 'left';
+      ctx.fillText(`${labels[item.status] || item.status} (${item.count})`, lx + 16, legendY + 4);
+      lx += 110;
+    });
+  }, [data]);
+
+  if (!data) {
+    return <div className="empty-state"><RefreshCw size={28} /><h3>Đang tải dữ liệu...</h3><p>Vui lòng đợi trong giây lát.</p></div>;
+  }
+
+  const { summary, topUsers, recentAttempts } = data;
+  const summaryCards = [
+    { label: 'Người dùng', value: summary.totalUsers, icon: Users, accent: 'blue' },
+    { label: 'Chủ đề', value: summary.totalTopics, icon: BookOpen, accent: 'purple' },
+    { label: 'Bộ câu hỏi', value: summary.totalSets, icon: FileQuestion, accent: 'green' },
+    { label: 'Lượt thi', value: summary.totalAttempts, icon: TrendingUp, accent: 'orange' }
+  ];
+
+  return (
+    <div className="dashboard-layout">
+      <div className="stats-grid">
+        {summaryCards.map(c => <StatCard key={c.label} label={c.label} value={c.value.toLocaleString('vi-VN')} icon={c.icon} accent={c.accent} />)}
+      </div>
+
+      <div className="dashboard-charts">
+        <section className="glass-card chart-card">
+          <div className="section-heading tight">
+            <div><p className="eyebrow">14 ngày gần nhất</p><h2>Lượt thi theo ngày</h2></div>
+            <TrendingUp size={22} style={{ color: 'var(--primary)', opacity: 0.6 }} />
+          </div>
+          <canvas ref={lineRef} style={{ width: '100%', height: '260px' }} />
+        </section>
+
+        <section className="glass-card chart-card">
+          <div className="section-heading tight">
+            <div><p className="eyebrow">Phân bổ nội dung</p><h2>Trạng thái bộ câu hỏi</h2></div>
+          </div>
+          <canvas ref={pieRef} style={{ width: '100%', height: '260px' }} />
+        </section>
+      </div>
+
+      <div className="dashboard-bottom">
+        <section className="glass-card table-card">
+          <div className="section-heading tight">
+            <div><p className="eyebrow">Bảng xếp hạng</p><h2>Top 10 người dùng</h2></div>
+            <Award size={22} style={{ color: 'var(--purple)', opacity: 0.7 }} />
+          </div>
+          {topUsers.length > 0 ? (
+            <div className="rank-list">
+              {topUsers.map((u, i) => (
+                <div className="rank-row" key={u.userId}>
+                  <span className={`rank-badge rank-${i < 3 ? i + 1 : 'default'}`}>{i + 1}</span>
+                  <div className="rank-info">
+                    <strong>{u.displayName}</strong>
+                    <span>{u.attemptCount} lượt thi</span>
+                  </div>
+                  <strong className="rank-score">{u.totalScore.toLocaleString('vi-VN')}</strong>
+                </div>
+              ))}
+            </div>
+          ) : <p className="muted" style={{ padding: '16px 0' }}>Chưa có dữ liệu người dùng.</p>}
+        </section>
+
+        <section className="glass-card table-card">
+          <div className="section-heading tight">
+            <div><p className="eyebrow">Dòng thời gian</p><h2>Hoạt động gần đây</h2></div>
+            <Clock size={22} style={{ color: 'var(--green)', opacity: 0.7 }} />
+          </div>
+          {recentAttempts.length > 0 ? (
+            <div className="activity-list">
+              {recentAttempts.map(a => (
+                <div className="activity-row" key={a.id}>
+                  <div className="activity-avatar">{a.user.displayName.charAt(0).toUpperCase()}</div>
+                  <div className="activity-info">
+                    <strong>{a.user.displayName}</strong>
+                    <span>{a.quizSet.title}</span>
+                  </div>
+                  <div className="activity-meta">
+                    <strong>{a.score}/{a.maxScore}</strong>
+                    <span>{formatSeconds(a.timeTaken)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : <p className="muted" style={{ padding: '16px 0' }}>Chưa có hoạt động nào.</p>}
+        </section>
+      </div>
     </div>
   );
 }
