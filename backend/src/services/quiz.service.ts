@@ -485,10 +485,15 @@ export const batchSaveQuestions = async (quizSetId: string, data: {
   });
 };
 
-export const getDashboardStats = async () => {
-  const fourteenDaysAgo = new Date();
-  fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 13);
-  fourteenDaysAgo.setHours(0, 0, 0, 0);
+export const getDashboardStats = async (startDate?: string, endDate?: string) => {
+  const end = endDate ? new Date(endDate) : new Date();
+  end.setHours(23, 59, 59, 999);
+  
+  const start = startDate ? new Date(startDate) : new Date(end);
+  if (!startDate) {
+    start.setDate(end.getDate() - 13);
+  }
+  start.setHours(0, 0, 0, 0);
 
   const [
     totalUsers,
@@ -503,7 +508,7 @@ export const getDashboardStats = async () => {
     prisma.user.count(),
     prisma.quizTopic.count({ where: { archivedAt: null } }),
     prisma.quizSet.count({ where: { archivedAt: null } }),
-    prisma.quizAttempt.count({ where: { status: { in: ['SUBMITTED', 'EXPIRED'] } } }),
+    prisma.quizAttempt.count(),
 
     prisma.quizSet.groupBy({
       by: ['status'],
@@ -512,11 +517,11 @@ export const getDashboardStats = async () => {
     }),
 
     prisma.$queryRaw<{ date: string; count: bigint }[]>`
-      SELECT DATE("submittedAt") as date, COUNT(*)::bigint as count
+      SELECT DATE("startedAt" AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Ho_Chi_Minh') as date, COUNT(*)::bigint as count
       FROM quiz_attempts
-      WHERE status IN ('SUBMITTED', 'EXPIRED')
-        AND "submittedAt" >= ${fourteenDaysAgo}
-      GROUP BY DATE("submittedAt")
+      WHERE "startedAt" >= ${start}
+        AND "startedAt" <= ${end}
+      GROUP BY date
       ORDER BY date ASC
     `,
 
@@ -548,13 +553,25 @@ export const getDashboardStats = async () => {
     })
   ]);
 
-  // Fill missing days in the 14-day range
-  const dailyMap = new Map(dailyRaw.map(r => [r.date.toString().slice(0, 10), Number(r.count)]));
+  // Fill missing days in the selected range using Vietnam Timezone for keys
+  const dailyMap = new Map();
+  dailyRaw.forEach(r => {
+    // Ensure we handle different possible date formats from $queryRaw
+    const dateStr = (r.date as any) instanceof Date 
+      ? (r.date as any).toISOString().slice(0, 10) 
+      : String(r.date).slice(0, 10);
+    dailyMap.set(dateStr, Number(r.count));
+  });
+
   const dailyAttempts: { date: string; count: number }[] = [];
-  for (let i = 0; i < 14; i++) {
-    const d = new Date(fourteenDaysAgo);
+  const diffTime = Math.abs(end.getTime() - start.getTime());
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  
+  for (let i = 0; i <= diffDays; i++) {
+    const d = new Date(start);
     d.setDate(d.getDate() + i);
-    const key = d.toISOString().slice(0, 10);
+    // Format to YYYY-MM-DD in Vietnam timezone
+    const key = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(d);
     dailyAttempts.push({ date: key, count: dailyMap.get(key) || 0 });
   }
 

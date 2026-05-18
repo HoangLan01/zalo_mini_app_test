@@ -1,10 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import logo from './assets/logo.jpg';
 import { createRoot } from 'react-dom/client';
 import {
   Award,
   Bell,
   BookOpen,
-  Building2,
   CheckCircle,
   ChevronDown,
   Clock,
@@ -65,7 +65,7 @@ type Stats = {
   averageTimeTaken: number;
   leaderboard: Array<{ id: string; score: number; maxScore: number; timeTaken: number; user: { displayName: string } }>;
 };
-type ViewMode = 'dashboard' | 'bank' | 'create' | 'guide';
+type ViewMode = 'dashboard' | 'bank' | 'create' | 'guide' | 'news' | 'procedures' | 'users' | 'settings';
 type DashboardData = {
   summary: { totalUsers: number; totalTopics: number; totalSets: number; totalAttempts: number };
   dailyAttempts: { date: string; count: number }[];
@@ -176,7 +176,7 @@ function Login({ onLogin }: { onLogin: () => void }) {
     <main className="login-shell">
       <form className="login-card glass-card" onSubmit={submit}>
         <div className="brand-mark">
-          <Building2 size={26} />
+          <img src={logo} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
         </div>
         <div>
           <p className="eyebrow">Tùng Thiện Digital Admin</p>
@@ -220,6 +220,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   const [modalForm, setModalForm] = useState({ title: '', description: '', timeLimit: 300, order: 0, setId: '' });
   const [stats, setStats] = useState<Stats | null>(null);
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
+  const [dashboardRange, setDashboardRange] = useState({ start: '', end: '' });
 
   const selectedSet = useMemo(() => sets.find(item => item.id === selectedSetId), [sets, selectedSetId]);
   const filteredSets = useMemo(
@@ -310,11 +311,15 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
 
   useEffect(() => {
     if (view === 'dashboard') {
-      api<DashboardData>('/api/admin/quiz/dashboard')
+      const params = new URLSearchParams();
+      if (dashboardRange.start) params.set('startDate', dashboardRange.start);
+      if (dashboardRange.end) params.set('endDate', dashboardRange.end);
+      
+      api<DashboardData>(`/api/admin/quiz/dashboard?${params.toString()}`)
         .then(setDashboardData)
         .catch(err => showMessage(err instanceof Error ? err.message : 'Không thể tải dữ liệu tổng quan', 'error'));
     }
-  }, [view]);
+  }, [view, dashboardRange]);
 
   useEffect(() => {
     const handlePopState = () => {
@@ -481,7 +486,13 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
       </Modal>
 
       {view === 'dashboard' ? (
-        <DashboardView data={dashboardData} />
+        <DashboardView 
+          data={dashboardData} 
+          range={dashboardRange} 
+          onRangeChange={setDashboardRange} 
+        />
+      ) : ['news', 'procedures', 'users', 'settings'].includes(view) ? (
+        <ComingSoonView view={view} />
       ) : view === 'bank' ? (
         <QuestionBankView
           topics={topics}
@@ -551,7 +562,9 @@ function AdminShell({
     <main className="admin-layout">
       <aside className="sidebar">
         <div className="sidebar-brand">
-          <div className="brand-mark"><Building2 size={24} /></div>
+          <div className="brand-mark">
+            <img src={logo} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
+          </div>
           <div>
             <strong>Tùng Thiện</strong>
             <span>Digital Admin</span>
@@ -564,14 +577,22 @@ function AdminShell({
           <button className={(view === 'bank' || view === 'create') ? 'nav-item active' : 'nav-item'} onClick={() => onNavigate('bank')}>
             <FileQuestion size={20} /> Chuyển đổi số
           </button>
-          <button className="nav-item"><BookOpen size={20} /> Tin tức & Sự kiện</button>
-          <button className="nav-item"><ClipboardList size={20} /> Thủ tục hành chính</button>
+          <button className={view === 'news' ? 'nav-item active' : 'nav-item'} onClick={() => onNavigate('news')}>
+            <BookOpen size={20} /> Tin tức & Sự kiện
+          </button>
+          <button className={view === 'procedures' ? 'nav-item active' : 'nav-item'} onClick={() => onNavigate('procedures')}>
+            <ClipboardList size={20} /> Thủ tục hành chính
+          </button>
           <p>Hệ thống</p>
           <button className={view === 'guide' ? 'nav-item active' : 'nav-item'} onClick={() => onNavigate('guide')}>
             <HelpCircle size={20} /> Hướng dẫn sử dụng
           </button>
-          <button className="nav-item"><Shield size={20} /> Người dùng</button>
-          <button className="nav-item"><Settings size={20} /> Cài đặt</button>
+          <button className={view === 'users' ? 'nav-item active' : 'nav-item'} onClick={() => onNavigate('users')}>
+            <Award size={20} /> Người dùng
+          </button>
+          <button className={view === 'settings' ? 'nav-item active' : 'nav-item'} onClick={() => onNavigate('settings')}>
+            <Settings size={20} /> Cài đặt
+          </button>
         </nav>
 
         <div className="sidebar-user">
@@ -592,12 +613,18 @@ function AdminShell({
             <div className="breadcrumb">
               {view === 'dashboard' ? (
                 <strong>Tổng quan hệ thống</strong>
-              ) : (
+              ) : ['news', 'procedures', 'users', 'settings'].includes(view) ? (
+               <button className="primary-button" onClick={() => onNavigate('dashboard')}>Về trang chủ</button>
+             ) : (
                 <>
                   <span>Kiến thức Chuyển đổi số</span>
                   <span>/</span>
                   <button onClick={() => onNavigate('bank')}>Quản lý câu hỏi</button>
                   {view === 'guide' && <><span>/</span><strong>Hướng dẫn sử dụng</strong></>}
+                  {view === 'news' && <><span>/</span><strong>Tin tức & Sự kiện</strong></>}
+                  {view === 'procedures' && <><span>/</span><strong>Thủ tục hành chính</strong></>}
+                  {view === 'users' && <><span>/</span><strong>Quản lý người dùng</strong></>}
+                  {view === 'settings' && <><span>/</span><strong>Cài đặt hệ thống</strong></>}
                   {view === 'create' && <><span>/</span><strong>Thêm câu hỏi mới</strong></>}
                 </>
               )}
@@ -963,9 +990,29 @@ function SetEditorView({
 }
 
 
-function DashboardView({ data }: { data: DashboardData | null }) {
+function DashboardView({ data, range, onRangeChange }: { 
+  data: DashboardData | null; 
+  range: { start: string; end: string };
+  onRangeChange: (range: { start: string; end: string }) => void;
+}) {
   const lineRef = useRef<HTMLCanvasElement>(null);
   const pieRef = useRef<HTMLCanvasElement>(null);
+
+  const setQuickRange = (days: number) => {
+    const end = new Date().toISOString().split('T')[0];
+    const start = new Date(Date.now() - (days - 1) * 86400000).toISOString().split('T')[0];
+    onRangeChange({ start, end });
+  };
+
+  const getRangeLabel = () => {
+    if (!range.start || !range.end) return '14 ngày gần nhất';
+    const s = new Date(range.start);
+    const e = new Date(range.end);
+    const diff = Math.ceil(Math.abs(e.getTime() - s.getTime()) / 86400000) + 1;
+    if (diff === 7) return '7 ngày qua';
+    if (diff === 30) return '30 ngày qua';
+    return `${s.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })} - ${e.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}`;
+  };
 
   useEffect(() => {
     if (!data || !lineRef.current) return;
@@ -1003,10 +1050,11 @@ function DashboardView({ data }: { data: DashboardData | null }) {
     // X labels
     ctx.textAlign = 'center';
     ctx.fillStyle = '#8d93a5';
+    const labelStep = Math.max(1, Math.ceil(points.length / 10));
     points.forEach((p, i) => {
-      const x = pad.left + (i / (points.length - 1 || 1)) * cw;
-      const label = p.date.slice(5); // MM-DD
-      if (i % 2 === 0 || points.length <= 7) {
+      if (i % labelStep === 0 || i === points.length - 1) {
+        const x = pad.left + (i / (points.length - 1 || 1)) * cw;
+        const label = p.date.slice(5); // MM-DD
         ctx.fillText(label, x, h - pad.bottom + 22);
       }
     });
@@ -1040,17 +1088,19 @@ function DashboardView({ data }: { data: DashboardData | null }) {
     ctx.stroke();
 
     // Dots
-    points.forEach((p, i) => {
-      const x = pad.left + (i / (points.length - 1 || 1)) * cw;
-      const y = pad.top + ch - (p.count / maxVal) * ch;
-      ctx.beginPath();
-      ctx.arc(x, y, 4, 0, Math.PI * 2);
-      ctx.fillStyle = '#fff';
-      ctx.fill();
-      ctx.strokeStyle = '#0052cc';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-    });
+    if (points.length <= 45) {
+      points.forEach((p, i) => {
+        const x = pad.left + (i / (points.length - 1 || 1)) * cw;
+        const y = pad.top + ch - (p.count / maxVal) * ch;
+        ctx.beginPath();
+        ctx.arc(x, y, 4, 0, Math.PI * 2);
+        ctx.fillStyle = '#fff';
+        ctx.fill();
+        ctx.strokeStyle = '#0052cc';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      });
+    }
   }, [data]);
 
   useEffect(() => {
@@ -1133,6 +1183,19 @@ function DashboardView({ data }: { data: DashboardData | null }) {
 
   return (
     <div className="dashboard-layout">
+      <div className="dashboard-toolbar">
+        <div className="range-presets">
+          <button className="text-button compact" onClick={() => setQuickRange(7)}>7 ngày</button>
+          <button className="text-button compact" onClick={() => setQuickRange(30)}>30 ngày</button>
+          <button className="text-button compact" onClick={() => onRangeChange({ start: '', end: '' })}>Tất cả</button>
+        </div>
+        <div className="range-inputs">
+          <input type="date" value={range.start} onChange={e => onRangeChange({ ...range, start: e.target.value })} />
+          <span>-</span>
+          <input type="date" value={range.end} onChange={e => onRangeChange({ ...range, end: e.target.value })} />
+        </div>
+      </div>
+
       <div className="stats-grid">
         {summaryCards.map(c => <StatCard key={c.label} label={c.label} value={c.value.toLocaleString('vi-VN')} icon={c.icon} accent={c.accent} />)}
       </div>
@@ -1140,7 +1203,7 @@ function DashboardView({ data }: { data: DashboardData | null }) {
       <div className="dashboard-charts">
         <section className="glass-card chart-card">
           <div className="section-heading tight">
-            <div><p className="eyebrow">14 ngày gần nhất</p><h2>Lượt thi theo ngày</h2></div>
+            <div><p className="eyebrow">{getRangeLabel()}</p><h2>Lượt thi theo ngày</h2></div>
             <TrendingUp size={22} style={{ color: 'var(--primary)', opacity: 0.6 }} />
           </div>
           <canvas ref={lineRef} style={{ width: '100%', height: '260px' }} />
@@ -1199,6 +1262,32 @@ function DashboardView({ data }: { data: DashboardData | null }) {
             </div>
           ) : <p className="muted" style={{ padding: '16px 0' }}>Chưa có hoạt động nào.</p>}
         </section>
+      </div>
+    </div>
+  );
+}
+
+function ComingSoonView({ view }: { view: ViewMode }) {
+  const titles: Record<string, string> = {
+    news: 'Tin tức & Sự kiện',
+    procedures: 'Thủ tục hành chính',
+    users: 'Quản lý người dùng',
+    settings: 'Cài đặt hệ thống'
+  };
+  
+  return (
+    <div className="coming-soon-container">
+      <div className="glass-card coming-soon-card">
+        <div className="coming-soon-icon">
+          <div className="icon-pulse"></div>
+          <Clock size={48} className="icon-main" />
+        </div>
+        <h2>{titles[view] || 'Đang phát triển'}</h2>
+        <p>Tính năng này hiện đang trong giai đoạn phát triển.</p>
+        <div className="progress-bar-container">
+          <div className="progress-bar-fill"></div>
+        </div>
+        <div className="coming-soon-badge">Coming Soon</div>
       </div>
     </div>
   );

@@ -240,7 +240,8 @@ export const batchSaveQuestions = async (req: Request, res: Response, next: Next
 
 export const getDashboardStats = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const data = await quizService.getDashboardStats();
+    const { startDate, endDate } = req.query as { startDate?: string; endDate?: string };
+    const data = await quizService.getDashboardStats(startDate, endDate);
     res.status(200).json({ success: true, data });
   } catch (error) {
     next(error);
