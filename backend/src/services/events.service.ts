@@ -1,51 +1,199 @@
-// src/services/events.service.ts
-import { getSheetData, parseEventRow } from './googleSheets.service';
+import { EventCategory, EventStatus, Prisma } from '@prisma/client';
+import { prisma } from '../server';
 
-export const getAllEvents = async (filters: { status?: 'upcoming'|'ongoing'|'past', page: number, limit: number }) => {
-  const sheetId = process.env.GOOGLE_SHEETS_EVENTS_ID;
-  const rows = await getSheetData(sheetId || '', 'A:K');
+type EventInput = {
+  title: string;
+  description: string;
+  category: EventCategory;
+  location: string;
+  startAt: string | Date;
+  endAt: string | Date;
+  organizer: string;
+  contactInfo?: string | null;
+  imageUrls: string[];
+  thumbnailUrl: string;
+  order?: number;
+};
 
-  let data = rows.map(parseEventRow).filter(item => item !== null) as any[];
+type EventQuery = {
+  status?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+};
 
-  const now = new Date().getTime();
+const parseDate = (value: string | Date) => {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) throw new Error('EVENT_INVALID_DATE');
+  return date;
+};
 
-  if (filters.status) {
-    data = data.filter(item => {
-      const start = new Date(item.startAt).getTime();
-      const end = new Date(item.endAt).getTime();
+const validateEventInput = (input: EventInput, publishing = false) => {
+  const startAt = parseDate(input.startAt);
+  const endAt = parseDate(input.endAt);
 
-      if (filters.status === 'upcoming') return start > now;
-      if (filters.status === 'ongoing') return start <= now && end >= now;
-      if (filters.status === 'past') return end < now;
-      return true;
-    });
-  }
+  if (endAt < startAt) throw new Error('EVENT_INVALID_DATE_RANGE');
 
-  data.sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
-
-  const total = data.length;
-  const skip = (filters.page - 1) * filters.limit;
-  const paginatedData = data.slice(skip, skip + filters.limit);
+  const imageUrls = Array.from(new Set((input.imageUrls || []).filter(Boolean)));
+  if (publishing && imageUrls.length === 0) throw new Error('EVENT_MISSING_IMAGES');
+  if (publishing && !input.thumbnailUrl) throw new Error('EVENT_MISSING_THUMBNAIL');
+  if (input.thumbnailUrl && !imageUrls.includes(input.thumbnailUrl)) throw new Error('EVENT_THUMBNAIL_NOT_IN_IMAGES');
 
   return {
-    data: paginatedData,
-    pagination: {
-      page: filters.page,
-      limit: filters.limit,
-      total,
-      totalPages: Math.ceil(total / filters.limit)
-    }
+    ...input,
+    startAt,
+    endAt,
+    imageUrls
   };
 };
 
-export const getEventById = async (id: string) => {
-  const sheetId = process.env.GOOGLE_SHEETS_EVENTS_ID;
-  const rows = await getSheetData(sheetId || '', 'A:K');
-  
-  for (const row of rows) {
-    const item = parseEventRow(row);
-    if (item && item.id === id) return item;
-  }
-  
-  return null;
+const withPublicStatus = <T extends { startAt: Date; endAt: Date }>(event: T) => {
+  const now = new Date();
+  const status = event.endAt < now ? 'past' : event.startAt > now ? 'upcoming' : 'ongoing';
+  return { ...event, status };
+};
+
+const getPagination = (query: EventQuery) => {
+  const page = Math.max(1, Number(query.page) || 1);
+  const limit = Math.min(50, Math.max(1, Number(query.limit) || 10));
+  return { page, limit, skip: (page - 1) * limit };
+};
+
+export const getAdminEvents = async (query: EventQuery) => {
+  const { page, limit, skip } = getPagination(query);
+  const where: Prisma.EventWhereInput = {
+    archivedAt: null,
+    ...(query.status && query.status !== 'ALL' ? { status: query.status as EventStatus } : {}),
+    ...(query.search ? {
+      OR: [
+        { title: { contains: query.search, mode: 'insensitive' } },
+        { location: { contains: query.search, mode: 'insensitive' } },
+        { organizer: { contains: query.search, mode: 'insensitive' } }
+      ]
+    } : {})
+  };
+
+  const [items, total] = await Promise.all([
+    prisma.event.findMany({
+      where,
+      orderBy: [{ order: 'asc' }, { startAt: 'desc' }, { createdAt: 'desc' }],
+      skip,
+      take: limit
+    }),
+    prisma.event.count({ where })
+  ]);
+
+  return { items, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } };
+};
+
+export const createEvent = async (input: EventInput) => {
+  const data = validateEventInput(input);
+  return prisma.event.create({
+    data: {
+      ...data,
+      order: data.order || 0,
+      contactInfo: data.contactInfo || null
+    }
+  });
+};
+
+export const updateEvent = async (id: string, input: Partial<EventInput>) => {
+  const existing = await prisma.event.findFirst({ where: { id, archivedAt: null } });
+  if (!existing) throw new Error('NOT_FOUND');
+
+  const merged = validateEventInput({
+    title: input.title ?? existing.title,
+    description: input.description ?? existing.description,
+    category: input.category ?? existing.category,
+    location: input.location ?? existing.location,
+    startAt: input.startAt ?? existing.startAt,
+    endAt: input.endAt ?? existing.endAt,
+    organizer: input.organizer ?? existing.organizer,
+    contactInfo: input.contactInfo ?? existing.contactInfo,
+    imageUrls: input.imageUrls ?? existing.imageUrls,
+    thumbnailUrl: input.thumbnailUrl ?? existing.thumbnailUrl,
+    order: input.order ?? existing.order
+  });
+
+  return prisma.event.update({
+    where: { id },
+    data: {
+      title: merged.title,
+      description: merged.description,
+      category: merged.category,
+      location: merged.location,
+      startAt: merged.startAt,
+      endAt: merged.endAt,
+      organizer: merged.organizer,
+      contactInfo: merged.contactInfo || null,
+      imageUrls: merged.imageUrls,
+      thumbnailUrl: merged.thumbnailUrl,
+      order: merged.order
+    }
+  });
+};
+
+export const archiveEvent = async (id: string) => {
+  return prisma.event.update({
+    where: { id },
+    data: { status: 'ARCHIVED', archivedAt: new Date() }
+  });
+};
+
+export const publishEvent = async (id: string) => {
+  const event = await prisma.event.findFirst({ where: { id, archivedAt: null } });
+  if (!event) throw new Error('NOT_FOUND');
+
+  validateEventInput(event, true);
+
+  return prisma.event.update({
+    where: { id },
+    data: { status: 'PUBLISHED', publishedAt: new Date(), closedAt: null }
+  });
+};
+
+export const closeEvent = async (id: string) => {
+  return prisma.event.update({
+    where: { id },
+    data: { status: 'CLOSED', closedAt: new Date() }
+  });
+};
+
+export const getPublicEvents = async (query: EventQuery) => {
+  const { page, limit, skip } = getPagination(query);
+  const now = new Date();
+  const statusWhere: Prisma.EventWhereInput =
+    query.status === 'upcoming' ? { startAt: { gt: now } } :
+    query.status === 'ongoing' ? { startAt: { lte: now }, endAt: { gte: now } } :
+    query.status === 'past' ? { endAt: { lt: now } } :
+    {};
+
+  const where: Prisma.EventWhereInput = {
+    archivedAt: null,
+    status: 'PUBLISHED',
+    ...statusWhere
+  };
+
+  const [items, total] = await Promise.all([
+    prisma.event.findMany({
+      where,
+      orderBy: [{ order: 'asc' }, { startAt: 'asc' }],
+      skip,
+      take: limit
+    }),
+    prisma.event.count({ where })
+  ]);
+
+  return {
+    items: items.map(withPublicStatus),
+    pagination: { page, limit, total, totalPages: Math.ceil(total / limit) }
+  };
+};
+
+export const getPublicEvent = async (id: string) => {
+  const event = await prisma.event.findFirst({
+    where: { id, archivedAt: null, status: 'PUBLISHED' }
+  });
+  if (!event) throw new Error('NOT_FOUND');
+  return withPublicStatus(event);
 };

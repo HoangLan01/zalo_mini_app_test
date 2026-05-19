@@ -113,6 +113,31 @@ model Rating {
   @@map("ratings")
 }
 
+model Event {
+  id           String        @id @default(uuid())
+  title        String        @db.VarChar(255)
+  description  String
+  category     EventCategory @default(KHAC)
+  location     String        @db.VarChar(255)
+  startAt      DateTime      @db.Timestamptz(6)
+  endAt        DateTime      @db.Timestamptz(6)
+  organizer    String        @db.VarChar(255)
+  contactInfo  String?
+  imageUrls    String[]      @default([])
+  thumbnailUrl String
+  status       EventStatus   @default(DRAFT)
+  order        Int           @default(0)
+  publishedAt  DateTime?     @db.Timestamptz(6)
+  closedAt     DateTime?     @db.Timestamptz(6)
+  archivedAt   DateTime?     @db.Timestamptz(6)
+  createdAt    DateTime      @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime      @updatedAt @db.Timestamptz(6)
+
+  @@index([status, archivedAt, startAt])
+  @@index([createdAt(sort: Desc)])
+  @@map("events")
+}
+
 model QuizTopic {
   id          String    @id @default(uuid())
   slug        String    @unique @db.VarChar(120)
@@ -246,6 +271,21 @@ enum QuizAttemptStatus {
   IN_PROGRESS
   SUBMITTED
   EXPIRED
+}
+
+enum EventStatus {
+  DRAFT
+  PUBLISHED
+  CLOSED
+  ARCHIVED
+}
+
+enum EventCategory {
+  VAN_HOA
+  THE_THAO
+  HANH_CHINH
+  LE_HOI
+  KHAC
 }
 
 enum FeedbackStatus {

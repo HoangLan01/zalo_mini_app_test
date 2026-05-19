@@ -20,6 +20,8 @@ import BookingIndexPage from '@/pages/booking/index';
 import BookingCreatePage from '@/pages/booking/create';
 import HeritageIndexPage from '@/pages/heritage/index';
 import HeritageDetailPage from '@/pages/heritage/detail';
+import EventsIndexPage from '@/pages/events/index';
+import EventsDetailPage from '@/pages/events/detail';
 import { useUserStore } from '@/store/userStore';
 
 const MyApp: React.FC = () => {
@@ -44,7 +46,8 @@ const MyApp: React.FC = () => {
             <Route path="/heritage-detail" element={<HeritageDetailPage />} />
 
             <Route path="/rating" element={<ReviewPage />} />
-            <Route path="/events" element={<ComingSoon title="Sự kiện sắp tới" />} />
+            <Route path="/events" element={<EventsIndexPage />} />
+            <Route path="/events-detail" element={<EventsDetailPage />} />
             <Route path="/education" element={<ComingSoon title="Giáo dục" />} />
             <Route path="/planning" element={<ComingSoon title="Quy hoạch" />} />
             <Route path="/services" element={<ComingSoon title="Dịch vụ đời sống" />} />

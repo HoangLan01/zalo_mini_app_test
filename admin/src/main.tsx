@@ -5,6 +5,7 @@ import {
   Award,
   Bell,
   BookOpen,
+  CalendarDays,
   CheckCircle,
   ChevronDown,
   Clock,
@@ -15,6 +16,7 @@ import {
   LayoutDashboard,
   ListFilter,
   LogOut,
+  Image as ImageIcon,
   Plus,
   RefreshCw,
   Save,
@@ -24,6 +26,7 @@ import {
   SlidersHorizontal,
   Trash2,
   TrendingUp,
+  Upload,
   Users,
   X
 } from 'lucide-react';
@@ -36,6 +39,29 @@ const TOKEN_KEY = 'quiz_admin_token';
 type ApiResponse<T> = { success: true; data: T } | { success: false; error: { code: string; message: string } };
 type Topic = { id: string; title: string; slug: string; description?: string; order: number; isActive: boolean; _count?: { sets: number } };
 type QuizSetStatus = 'DRAFT' | 'PUBLISHED' | 'CLOSED' | 'ARCHIVED' | string;
+type EventStatus = 'DRAFT' | 'PUBLISHED' | 'CLOSED' | 'ARCHIVED' | string;
+type EventCategory = 'VAN_HOA' | 'THE_THAO' | 'HANH_CHINH' | 'LE_HOI' | 'KHAC';
+type ManagedEvent = {
+  id: string;
+  title: string;
+  description: string;
+  category: EventCategory;
+  location: string;
+  startAt: string;
+  endAt: string;
+  organizer: string;
+  contactInfo?: string | null;
+  imageUrls: string[];
+  thumbnailUrl: string;
+  status: EventStatus;
+  order: number;
+  publishedAt?: string | null;
+  closedAt?: string | null;
+};
+type EventListResponse = {
+  items: ManagedEvent[];
+  pagination: { page: number; limit: number; total: number; totalPages: number };
+};
 type QuizSet = {
   id: string;
   topicId: string;
@@ -65,7 +91,7 @@ type Stats = {
   averageTimeTaken: number;
   leaderboard: Array<{ id: string; score: number; maxScore: number; timeTaken: number; user: { displayName: string } }>;
 };
-type ViewMode = 'dashboard' | 'bank' | 'create' | 'guide' | 'news' | 'procedures' | 'users' | 'settings';
+type ViewMode = 'dashboard' | 'bank' | 'create' | 'guide' | 'events' | 'news' | 'procedures' | 'users' | 'settings';
 type DashboardData = {
   summary: { totalUsers: number; totalTopics: number; totalSets: number; totalAttempts: number };
   dailyAttempts: { date: string; count: number }[];
@@ -83,6 +109,20 @@ type QuestionDraft = {
   explanation: string;
   options: Option[];
 };
+type EventFormState = {
+  id?: string;
+  title: string;
+  description: string;
+  category: EventCategory;
+  location: string;
+  startAt: string;
+  endAt: string;
+  organizer: string;
+  contactInfo: string;
+  imageUrls: string[];
+  thumbnailUrl: string;
+  order: number;
+};
 
 const emptyQuestionDraft = (order = 1): QuestionDraft => ({
   id: `draft-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -97,6 +137,20 @@ const emptyQuestionDraft = (order = 1): QuestionDraft => ({
     { content: '', isCorrect: false },
     { content: '', isCorrect: false }
   ]
+});
+
+const emptyEventForm = (): EventFormState => ({
+  title: '',
+  description: '',
+  category: 'KHAC',
+  location: '',
+  startAt: '',
+  endAt: '',
+  organizer: '',
+  contactInfo: '',
+  imageUrls: [],
+  thumbnailUrl: '',
+  order: 0
 });
 
 async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -116,6 +170,25 @@ async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   return json.data;
 }
 
+async function uploadEventImages(files: File[]): Promise<string[]> {
+  const token = localStorage.getItem(TOKEN_KEY);
+  const formData = new FormData();
+  files.forEach(file => formData.append('files', file));
+
+  const res = await fetch(`${API_URL}/api/upload?purpose=event`, {
+    method: 'POST',
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    },
+    body: formData
+  });
+  const json = (await res.json()) as ApiResponse<{ urls: string[] }>;
+  if (!res.ok || !json.success) {
+    throw new Error(json.success ? `HTTP ${res.status}` : json.error.message);
+  }
+  return json.data.urls;
+}
+
 const statusLabel = (status: QuizSetStatus) => {
   const labels: Record<string, string> = {
     DRAFT: 'Nháp',
@@ -124,6 +197,36 @@ const statusLabel = (status: QuizSetStatus) => {
     ARCHIVED: 'Lưu trữ'
   };
   return labels[status] || status;
+};
+
+const eventCategoryLabel = (category: EventCategory) => {
+  const labels: Record<EventCategory, string> = {
+    VAN_HOA: 'Van hoa',
+    THE_THAO: 'The thao',
+    HANH_CHINH: 'Hanh chinh',
+    LE_HOI: 'Le hoi',
+    KHAC: 'Khac'
+  };
+  return labels[category] || category;
+};
+
+const formatDateTime = (value: string) => {
+  if (!value) return '';
+  return new Intl.DateTimeFormat('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  }).format(new Date(value));
+};
+
+const toDateTimeInputValue = (value?: string) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 16);
 };
 
 const formatSeconds = (value: number) => {
@@ -139,6 +242,11 @@ const getViewFromLocation = (): ViewMode => {
   if (v === 'create') return 'create';
   if (v === 'guide') return 'guide';
   if (v === 'bank') return 'bank';
+  if (v === 'events') return 'events';
+  if (v === 'news') return 'news';
+  if (v === 'procedures') return 'procedures';
+  if (v === 'users') return 'users';
+  if (v === 'settings') return 'settings';
   return 'dashboard';
 };
 
@@ -491,6 +599,8 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
           range={dashboardRange} 
           onRangeChange={setDashboardRange} 
         />
+      ) : view === 'events' ? (
+        <EventManagementView showMessage={showMessage} />
       ) : ['news', 'procedures', 'users', 'settings'].includes(view) ? (
         <ComingSoonView view={view} />
       ) : view === 'bank' ? (
@@ -557,7 +667,11 @@ function AdminShell({
   onCloseClick?: () => void;
   onPublishClick?: () => void;
 }) {
-  const pageTitle = view === 'dashboard' ? 'Tổng quan' : view === 'bank' ? 'Ngân hàng câu hỏi' : view === 'guide' ? 'Hướng dẫn sử dụng' : 'Thêm câu hỏi mới';
+  const pageTitle = view === 'dashboard' ? 'Tổng quan' :
+    view === 'bank' ? 'Ngân hàng câu hỏi' :
+    view === 'events' ? 'Quan ly su kien' :
+    view === 'guide' ? 'Hướng dẫn sử dụng' :
+    'Thêm câu hỏi mới';
   return (
     <main className="admin-layout">
       <aside className="sidebar">
@@ -579,6 +693,9 @@ function AdminShell({
           </button>
           <button className={view === 'news' ? 'nav-item active' : 'nav-item'} onClick={() => onNavigate('news')}>
             <BookOpen size={20} /> Tin tức & Sự kiện
+          </button>
+          <button className={view === 'events' ? 'nav-item active' : 'nav-item'} onClick={() => onNavigate('events')}>
+            <CalendarDays size={20} /> Su kien
           </button>
           <button className={view === 'procedures' ? 'nav-item active' : 'nav-item'} onClick={() => onNavigate('procedures')}>
             <ClipboardList size={20} /> Thủ tục hành chính
@@ -613,7 +730,7 @@ function AdminShell({
             <div className="breadcrumb">
               {view === 'dashboard' ? (
                 <strong>Tổng quan hệ thống</strong>
-              ) : ['news', 'procedures', 'users', 'settings'].includes(view) ? (
+              ) : ['events', 'news', 'procedures', 'users', 'settings'].includes(view) ? (
                <button className="primary-button" onClick={() => onNavigate('dashboard')}>Về trang chủ</button>
              ) : (
                 <>
@@ -622,6 +739,7 @@ function AdminShell({
                   <button onClick={() => onNavigate('bank')}>Quản lý câu hỏi</button>
                   {view === 'guide' && <><span>/</span><strong>Hướng dẫn sử dụng</strong></>}
                   {view === 'news' && <><span>/</span><strong>Tin tức & Sự kiện</strong></>}
+                  {view === 'events' && <><span>/</span><strong>Quan ly su kien</strong></>}
                   {view === 'procedures' && <><span>/</span><strong>Thủ tục hành chính</strong></>}
                   {view === 'users' && <><span>/</span><strong>Quản lý người dùng</strong></>}
                   {view === 'settings' && <><span>/</span><strong>Cài đặt hệ thống</strong></>}
@@ -644,6 +762,8 @@ function AdminShell({
               </>
             ) : view === 'guide' ? (
               <button className="primary-button" onClick={() => onNavigate('bank')}>Quay lại quản lý</button>
+            ) : view === 'events' ? (
+              null
             ) : (
               <>
                 <button className="secondary-button" onClick={() => onNavigate('bank', 'replace')}>Hủy</button>
@@ -985,6 +1105,292 @@ function SetEditorView({
         <button className="secondary-button" onClick={onCancel}><X size={18} /> Hủy</button>
         <button className="primary-button" onClick={() => onSave(questions, deletedIds)}><Save size={18} /> Lưu tất cả thay đổi</button>
       </footer>
+    </div>
+  );
+}
+
+function EventManagementView({ showMessage }: { showMessage: (text: string, tone?: 'info' | 'error') => void }) {
+  const [events, setEvents] = useState<ManagedEvent[]>([]);
+  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState<EventFormState>(() => emptyEventForm());
+
+  const loadEvents = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (statusFilter !== 'ALL') params.set('status', statusFilter);
+      if (search.trim()) params.set('search', search.trim());
+      params.set('limit', '50');
+      const data = await api<EventListResponse>(`/api/admin/events?${params.toString()}`);
+      setEvents(data.items);
+    } catch (err) {
+      showMessage(err instanceof Error ? err.message : 'Khong the tai su kien', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [search, statusFilter, showMessage]);
+
+  useEffect(() => {
+    loadEvents();
+  }, [loadEvents]);
+
+  const editEvent = (event: ManagedEvent) => {
+    setForm({
+      id: event.id,
+      title: event.title,
+      description: event.description,
+      category: event.category,
+      location: event.location,
+      startAt: toDateTimeInputValue(event.startAt),
+      endAt: toDateTimeInputValue(event.endAt),
+      organizer: event.organizer,
+      contactInfo: event.contactInfo || '',
+      imageUrls: event.imageUrls || [],
+      thumbnailUrl: event.thumbnailUrl,
+      order: event.order || 0
+    });
+  };
+
+  const resetForm = () => setForm(emptyEventForm());
+
+  const validateForm = () => {
+    if (!form.title.trim() || !form.description.trim() || !form.location.trim() || !form.organizer.trim()) {
+      throw new Error('Nhap day du tieu de, mo ta, dia diem va don vi to chuc');
+    }
+    if (!form.startAt || !form.endAt) throw new Error('Nhap day du thoi gian bat dau va ket thuc');
+    if (new Date(form.endAt) < new Date(form.startAt)) throw new Error('Thoi gian ket thuc phai sau thoi gian bat dau');
+    if (form.imageUrls.length === 0) throw new Error('Tai len it nhat mot anh su kien');
+    if (!form.thumbnailUrl) throw new Error('Chon anh thumbnail');
+    if (!form.imageUrls.includes(form.thumbnailUrl)) throw new Error('Thumbnail phai nam trong danh sach anh');
+  };
+
+  const submitForm = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setSaving(true);
+    try {
+      validateForm();
+      const payload = {
+        title: form.title.trim(),
+        description: form.description.trim(),
+        category: form.category,
+        location: form.location.trim(),
+        startAt: new Date(form.startAt).toISOString(),
+        endAt: new Date(form.endAt).toISOString(),
+        organizer: form.organizer.trim(),
+        contactInfo: form.contactInfo.trim() || null,
+        imageUrls: form.imageUrls,
+        thumbnailUrl: form.thumbnailUrl,
+        order: form.order
+      };
+      if (form.id) {
+        await api(`/api/admin/events/${form.id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+        showMessage('Da cap nhat su kien');
+      } else {
+        await api('/api/admin/events', { method: 'POST', body: JSON.stringify(payload) });
+        showMessage('Da tao su kien');
+      }
+      resetForm();
+      await loadEvents();
+    } catch (err) {
+      showMessage(err instanceof Error ? err.message : 'Khong the luu su kien', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const uploadImages = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setSaving(true);
+    try {
+      const urls = await uploadEventImages(Array.from(files));
+      setForm(prev => {
+        const imageUrls = Array.from(new Set([...prev.imageUrls, ...urls]));
+        return { ...prev, imageUrls, thumbnailUrl: prev.thumbnailUrl || imageUrls[0] || '' };
+      });
+      showMessage('Da tai anh su kien');
+    } catch (err) {
+      showMessage(err instanceof Error ? err.message : 'Khong the tai anh', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const removeImage = (url: string) => {
+    setForm(prev => {
+      const imageUrls = prev.imageUrls.filter(item => item !== url);
+      return {
+        ...prev,
+        imageUrls,
+        thumbnailUrl: prev.thumbnailUrl === url ? imageUrls[0] || '' : prev.thumbnailUrl
+      };
+    });
+  };
+
+  const runAction = async (fn: () => Promise<unknown>, message: string) => {
+    try {
+      await fn();
+      showMessage(message);
+      await loadEvents();
+    } catch (err) {
+      showMessage(err instanceof Error ? err.message : 'Thao tac that bai', 'error');
+    }
+  };
+
+  const summary = [
+    { label: 'Tong su kien', value: events.length.toLocaleString('vi-VN'), icon: CalendarDays, accent: 'blue' },
+    { label: 'Hoat dong', value: events.filter(item => item.status === 'PUBLISHED').length.toLocaleString('vi-VN'), icon: CheckCircle, accent: 'green' },
+    { label: 'Ban nhap', value: events.filter(item => item.status === 'DRAFT').length.toLocaleString('vi-VN'), icon: ClipboardList, accent: 'purple' },
+    { label: 'Da dong', value: events.filter(item => item.status === 'CLOSED').length.toLocaleString('vi-VN'), icon: Shield, accent: 'orange' }
+  ] as const;
+
+  return (
+    <div className="bank-layout">
+      <section className="main-column">
+        <div className="stats-grid">
+          {summary.map(stat => <StatCard key={stat.label} {...stat} />)}
+        </div>
+
+        <div className="toolbar glass-card">
+          <div className="search-box">
+            <Search size={20} />
+            <input value={search} onChange={event => setSearch(event.target.value)} placeholder="Tim tieu de, dia diem, don vi to chuc..." />
+          </div>
+          <div className="filter-group">
+            <ListFilter size={20} />
+            <Select value={statusFilter} onChange={setStatusFilter} ariaLabel="Loc trang thai su kien">
+              <option value="ALL">Tat ca trang thai</option>
+              <option value="PUBLISHED">Hoat dong</option>
+              <option value="DRAFT">Nhap</option>
+              <option value="CLOSED">Da dong</option>
+            </Select>
+          </div>
+          <button className="text-button" onClick={loadEvents} disabled={loading}><RefreshCw size={17} /> Lam moi</button>
+        </div>
+
+        <section className="table-card glass-card">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Noi dung su kien</p>
+              <h2>Danh sach su kien</h2>
+            </div>
+            <button className="primary-button compact" onClick={resetForm}><Plus size={18} /> Them su kien</button>
+          </div>
+          {events.length > 0 ? (
+            <>
+              <div className="question-table event-table">
+                <div className="table-row table-head">
+                  <span>Su kien</span>
+                  <span>Thoi gian</span>
+                  <span>Danh muc</span>
+                  <span>Trang thai</span>
+                  <span>Thao tac</span>
+                </div>
+                {events.map(item => (
+                  <div className="table-row" key={item.id}>
+                    <div className="event-cell">
+                      <img src={item.thumbnailUrl} alt={item.title} />
+                      <div className="question-cell">
+                        <strong>{item.title}</strong>
+                        <small>{item.location} - {item.organizer}</small>
+                      </div>
+                    </div>
+                    <span>{formatDateTime(item.startAt)}</span>
+                    <span className="chip">{eventCategoryLabel(item.category)}</span>
+                    <StatusBadge status={item.status} />
+                    <div className="row-actions">
+                      <button className="icon-button" onClick={() => editEvent(item)} aria-label="Sua su kien"><Edit size={18} /></button>
+                      {item.status !== 'PUBLISHED' && <button className="icon-button" onClick={() => runAction(() => api(`/api/admin/events/${item.id}/publish`, { method: 'POST' }), 'Da xuat ban su kien')} aria-label="Xuat ban"><CheckCircle size={18} /></button>}
+                      {item.status === 'PUBLISHED' && <button className="icon-button" onClick={() => runAction(() => api(`/api/admin/events/${item.id}/close`, { method: 'POST' }), 'Da dong su kien')} aria-label="Dong"><Shield size={18} /></button>}
+                      <button className="icon-button danger" onClick={() => runAction(() => api(`/api/admin/events/${item.id}`, { method: 'DELETE' }), 'Da luu tru su kien')} aria-label="Luu tru"><Trash2 size={18} /></button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="table-footer">
+                <span>Hien thi {events.length} su kien</span>
+              </div>
+            </>
+          ) : <EmptyState title="Chua co su kien" description="Tao su kien dau tien va xuat ban de hien thi tren Mini App." actionLabel="Them su kien" onAction={resetForm} />}
+        </section>
+      </section>
+
+      <aside className="side-column">
+        <form className="glass-card management-card event-form" onSubmit={submitForm}>
+          <div className="section-heading tight">
+            <div>
+              <p className="eyebrow">{form.id ? 'Cap nhat' : 'Tao moi'}</p>
+              <h2>{form.id ? 'Sua su kien' : 'Them su kien'}</h2>
+            </div>
+            {form.id && <button type="button" className="icon-button" onClick={resetForm} aria-label="Tao moi"><Plus size={18} /></button>}
+          </div>
+
+          <label>Tieu de
+            <input required value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} />
+          </label>
+          <label>Mo ta HTML
+            <textarea required value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={6} />
+          </label>
+          <label>Danh muc
+            <Select value={form.category} onChange={value => setForm({ ...form, category: value as EventCategory })} ariaLabel="Danh muc su kien">
+              <option value="VAN_HOA">Van hoa</option>
+              <option value="THE_THAO">The thao</option>
+              <option value="HANH_CHINH">Hanh chinh</option>
+              <option value="LE_HOI">Le hoi</option>
+              <option value="KHAC">Khac</option>
+            </Select>
+          </label>
+          <label>Dia diem
+            <input required value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} />
+          </label>
+          <div className="form-grid-two">
+            <label>Bat dau
+              <input required type="datetime-local" value={form.startAt} onChange={e => setForm({ ...form, startAt: e.target.value })} />
+            </label>
+            <label>Ket thuc
+              <input required type="datetime-local" value={form.endAt} onChange={e => setForm({ ...form, endAt: e.target.value })} />
+            </label>
+          </div>
+          <label>Don vi to chuc
+            <input required value={form.organizer} onChange={e => setForm({ ...form, organizer: e.target.value })} />
+          </label>
+          <label>Lien he
+            <input value={form.contactInfo} onChange={e => setForm({ ...form, contactInfo: e.target.value })} />
+          </label>
+          <label>Thu tu uu tien
+            <input type="number" min={0} value={form.order} onChange={e => setForm({ ...form, order: Number(e.target.value) })} />
+          </label>
+
+          <div className="event-upload-box">
+            <label className="secondary-button">
+              <Upload size={18} /> Tai anh
+              <input type="file" accept="image/*" multiple hidden onChange={e => { uploadImages(e.target.files); e.currentTarget.value = ''; }} />
+            </label>
+            <span>{form.imageUrls.length}/10 anh</span>
+          </div>
+
+          {form.imageUrls.length > 0 ? (
+            <div className="event-image-grid">
+              {form.imageUrls.map(url => (
+                <div className={form.thumbnailUrl === url ? 'event-image selected' : 'event-image'} key={url}>
+                  <img src={url} alt="Event" />
+                  <button type="button" className="image-select" onClick={() => setForm({ ...form, thumbnailUrl: url })}>
+                    <ImageIcon size={14} /> Thumbnail
+                  </button>
+                  <button type="button" className="image-remove" onClick={() => removeImage(url)} aria-label="Xoa anh"><X size={14} /></button>
+                </div>
+              ))}
+            </div>
+          ) : <p className="muted">Chua co anh. Tai anh va chon thumbnail de co the xuat ban.</p>}
+
+          <div className="modal-footer">
+            <button type="button" className="secondary-button" onClick={resetForm}>Lam moi</button>
+            <button type="submit" className="primary-button" disabled={saving}>{saving ? 'Dang luu...' : 'Luu su kien'}</button>
+          </div>
+        </form>
+      </aside>
     </div>
   );
 }
