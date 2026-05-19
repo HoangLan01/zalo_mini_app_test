@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 import {
   Award,
   Bell,
+  Bold,
   BookOpen,
   CalendarDays,
   CheckCircle,
@@ -12,12 +13,18 @@ import {
   ClipboardList,
   Edit,
   FileQuestion,
+  Heading2,
   HelpCircle,
+  Italic,
   LayoutDashboard,
+  Link2,
   ListFilter,
+  List,
+  ListOrdered,
   LogOut,
   Image as ImageIcon,
   Plus,
+  Redo2,
   RefreshCw,
   Save,
   Search,
@@ -26,11 +33,18 @@ import {
   SlidersHorizontal,
   Trash2,
   TrendingUp,
+  Underline as UnderlineIcon,
+  Undo2,
   Upload,
   Users,
   X
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { EditorContent, useEditor } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import Underline from '@tiptap/extension-underline';
+import Link from '@tiptap/extension-link';
+import Image from '@tiptap/extension-image';
 import './styles.css';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
@@ -201,11 +215,11 @@ const statusLabel = (status: QuizSetStatus) => {
 
 const eventCategoryLabel = (category: EventCategory) => {
   const labels: Record<EventCategory, string> = {
-    VAN_HOA: 'Van hoa',
-    THE_THAO: 'The thao',
-    HANH_CHINH: 'Hanh chinh',
-    LE_HOI: 'Le hoi',
-    KHAC: 'Khac'
+    VAN_HOA: 'Văn hóa',
+    THE_THAO: 'Thể thao',
+    HANH_CHINH: 'Hành chính',
+    LE_HOI: 'Lễ hội',
+    KHAC: 'Khác'
   };
   return labels[category] || category;
 };
@@ -236,6 +250,120 @@ const formatSeconds = (value: number) => {
   if (!minutes) return `${seconds} giây`;
   return seconds ? `${minutes} phút ${seconds} giây` : `${minutes} phút`;
 };
+
+const getTextFromHtml = (html: string) => {
+  const doc = new DOMParser().parseFromString(html || '', 'text/html');
+  return (doc.body.textContent || '').replace(/\s+/g, ' ').trim();
+};
+
+function EventDescriptionEditor({
+  value,
+  disabled,
+  onChange,
+  onUploadImage,
+  showMessage
+}: {
+  value: string;
+  disabled?: boolean;
+  onChange: (value: string) => void;
+  onUploadImage: (files: File[]) => Promise<string[]>;
+  showMessage: (text: string, tone?: 'info' | 'error') => void;
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const editor = useEditor({
+    extensions: [
+      StarterKit.configure({
+        heading: { levels: [2, 3] }
+      }),
+      Underline,
+      Link.configure({
+        autolink: false,
+        openOnClick: false,
+        protocols: ['http', 'https', 'mailto'],
+        HTMLAttributes: {
+          target: '_blank',
+          rel: 'noopener noreferrer'
+        }
+      }),
+      Image.configure({
+        allowBase64: false,
+        inline: false
+      })
+    ],
+    content: value || '',
+    editable: !disabled,
+    onUpdate: ({ editor }) => onChange(editor.getHTML()),
+    editorProps: {
+      attributes: {
+        class: 'event-rich-editor-content'
+      }
+    }
+  });
+
+  useEffect(() => {
+    if (!editor) return;
+    editor.setEditable(!disabled);
+  }, [disabled, editor]);
+
+  useEffect(() => {
+    if (!editor) return;
+    const current = editor.getHTML();
+    if ((value || '') !== current) {
+      editor.commands.setContent(value || '', { emitUpdate: false });
+    }
+  }, [editor, value]);
+
+  const setLink = () => {
+    if (!editor) return;
+    const previousUrl = editor.getAttributes('link').href as string | undefined;
+    const url = window.prompt('Nhập đường dẫn liên kết', previousUrl || 'https://');
+    if (url === null) return;
+    if (!url.trim()) {
+      editor.chain().focus().extendMarkRange('link').unsetLink().run();
+      return;
+    }
+    editor.chain().focus().extendMarkRange('link').setLink({ href: url.trim() }).run();
+  };
+
+  const insertImage = async (files: FileList | null) => {
+    if (!editor || !files || files.length === 0) return;
+    setUploading(true);
+    try {
+      const [url] = await onUploadImage([files[0]]);
+      if (url) {
+        editor.chain().focus().setImage({ src: url, alt: files[0].name }).run();
+        showMessage('Đã chèn ảnh vào mô tả');
+      }
+    } catch (err) {
+      showMessage(err instanceof Error ? err.message : 'Không thể chèn ảnh vào mô tả', 'error');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const buttonClass = (active = false) => active ? 'editor-tool active' : 'editor-tool';
+
+  return (
+    <div className="event-rich-editor">
+      <div className="event-editor-toolbar" aria-label="Công cụ soạn thảo mô tả">
+        <button type="button" className={buttonClass(editor?.isActive('bold'))} disabled={!editor || disabled} onClick={() => editor?.chain().focus().toggleBold().run()} title="In đậm"><Bold size={16} /></button>
+        <button type="button" className={buttonClass(editor?.isActive('italic'))} disabled={!editor || disabled} onClick={() => editor?.chain().focus().toggleItalic().run()} title="In nghiêng"><Italic size={16} /></button>
+        <button type="button" className={buttonClass(editor?.isActive('underline'))} disabled={!editor || disabled} onClick={() => editor?.chain().focus().toggleUnderline().run()} title="Gạch chân"><UnderlineIcon size={16} /></button>
+        <button type="button" className={buttonClass(editor?.isActive('heading', { level: 2 }))} disabled={!editor || disabled} onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()} title="Tiêu đề"><Heading2 size={16} /></button>
+        <button type="button" className={buttonClass(editor?.isActive('bulletList'))} disabled={!editor || disabled} onClick={() => editor?.chain().focus().toggleBulletList().run()} title="Danh sách chấm"><List size={16} /></button>
+        <button type="button" className={buttonClass(editor?.isActive('orderedList'))} disabled={!editor || disabled} onClick={() => editor?.chain().focus().toggleOrderedList().run()} title="Danh sách số"><ListOrdered size={16} /></button>
+        <button type="button" className={buttonClass(editor?.isActive('link'))} disabled={!editor || disabled} onClick={setLink} title="Liên kết"><Link2 size={16} /></button>
+        <button type="button" className="editor-tool" disabled={!editor || disabled || uploading} onClick={() => fileInputRef.current?.click()} title="Chèn ảnh"><ImageIcon size={16} /></button>
+        <button type="button" className="editor-tool" disabled={!editor || disabled || !editor.can().undo()} onClick={() => editor?.chain().focus().undo().run()} title="Hoàn tác"><Undo2 size={16} /></button>
+        <button type="button" className="editor-tool" disabled={!editor || disabled || !editor.can().redo()} onClick={() => editor?.chain().focus().redo().run()} title="Làm lại"><Redo2 size={16} /></button>
+        <input ref={fileInputRef} type="file" accept="image/*" hidden onChange={event => { insertImage(event.target.files); event.currentTarget.value = ''; }} />
+      </div>
+      <EditorContent editor={editor} />
+      <p className="editor-help">{uploading ? 'Đang tải ảnh...' : 'Nhập mô tả như văn bản thường, dùng thanh công cụ để định dạng.'}</p>
+    </div>
+  );
+}
 
 const getViewFromLocation = (): ViewMode => {
   const v = new URLSearchParams(window.location.search).get('view');
@@ -669,7 +797,7 @@ function AdminShell({
 }) {
   const pageTitle = view === 'dashboard' ? 'Tổng quan' :
     view === 'bank' ? 'Ngân hàng câu hỏi' :
-    view === 'events' ? 'Quan ly su kien' :
+    view === 'events' ? 'Quản lý sự kiện' :
     view === 'guide' ? 'Hướng dẫn sử dụng' :
     'Thêm câu hỏi mới';
   return (
@@ -695,7 +823,7 @@ function AdminShell({
             <BookOpen size={20} /> Tin tức & Sự kiện
           </button>
           <button className={view === 'events' ? 'nav-item active' : 'nav-item'} onClick={() => onNavigate('events')}>
-            <CalendarDays size={20} /> Su kien
+            <CalendarDays size={20} /> Sự kiện
           </button>
           <button className={view === 'procedures' ? 'nav-item active' : 'nav-item'} onClick={() => onNavigate('procedures')}>
             <ClipboardList size={20} /> Thủ tục hành chính
@@ -739,7 +867,7 @@ function AdminShell({
                   <button onClick={() => onNavigate('bank')}>Quản lý câu hỏi</button>
                   {view === 'guide' && <><span>/</span><strong>Hướng dẫn sử dụng</strong></>}
                   {view === 'news' && <><span>/</span><strong>Tin tức & Sự kiện</strong></>}
-                  {view === 'events' && <><span>/</span><strong>Quan ly su kien</strong></>}
+                  {view === 'events' && <><span>/</span><strong>Quản lý sự kiện</strong></>}
                   {view === 'procedures' && <><span>/</span><strong>Thủ tục hành chính</strong></>}
                   {view === 'users' && <><span>/</span><strong>Quản lý người dùng</strong></>}
                   {view === 'settings' && <><span>/</span><strong>Cài đặt hệ thống</strong></>}
@@ -1114,7 +1242,9 @@ function EventManagementView({ showMessage }: { showMessage: (text: string, tone
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [uploadingEventImages, setUploadingEventImages] = useState(false);
+  const [uploadingDescriptionImage, setUploadingDescriptionImage] = useState(false);
   const [form, setForm] = useState<EventFormState>(() => emptyEventForm());
 
   const loadEvents = useCallback(async () => {
@@ -1127,7 +1257,7 @@ function EventManagementView({ showMessage }: { showMessage: (text: string, tone
       const data = await api<EventListResponse>(`/api/admin/events?${params.toString()}`);
       setEvents(data.items);
     } catch (err) {
-      showMessage(err instanceof Error ? err.message : 'Khong the tai su kien', 'error');
+      showMessage(err instanceof Error ? err.message : 'Không thể tải sự kiện', 'error');
     } finally {
       setLoading(false);
     }
@@ -1157,21 +1287,21 @@ function EventManagementView({ showMessage }: { showMessage: (text: string, tone
   const resetForm = () => setForm(emptyEventForm());
 
   const validateForm = () => {
-    if (!form.title.trim() || !form.description.trim() || !form.location.trim() || !form.organizer.trim()) {
-      throw new Error('Nhap day du tieu de, mo ta, dia diem va don vi to chuc');
+    if (!form.title.trim() || !getTextFromHtml(form.description) || !form.location.trim() || !form.organizer.trim()) {
+      throw new Error('Nhập đầy đủ tiêu đề, mô tả, địa điểm và đơn vị tổ chức');
     }
-    if (!form.startAt || !form.endAt) throw new Error('Nhap day du thoi gian bat dau va ket thuc');
-    if (new Date(form.endAt) < new Date(form.startAt)) throw new Error('Thoi gian ket thuc phai sau thoi gian bat dau');
-    if (form.imageUrls.length === 0) throw new Error('Tai len it nhat mot anh su kien');
-    if (!form.thumbnailUrl) throw new Error('Chon anh thumbnail');
-    if (!form.imageUrls.includes(form.thumbnailUrl)) throw new Error('Thumbnail phai nam trong danh sach anh');
+    if (!form.startAt || !form.endAt) throw new Error('Nhập đầy đủ thời gian bắt đầu và kết thúc');
+    if (new Date(form.endAt) < new Date(form.startAt)) throw new Error('Thời gian kết thúc phải sau thời gian bắt đầu');
+    if (form.thumbnailUrl && !form.imageUrls.includes(form.thumbnailUrl)) throw new Error('Thumbnail phải nằm trong danh sách ảnh');
   };
 
   const submitForm = async (event: React.FormEvent) => {
     event.preventDefault();
-    setSaving(true);
+    setSubmitting(true);
     try {
       validateForm();
+      const imageUrls = Array.from(new Set(form.imageUrls.filter(Boolean)));
+      const thumbnailUrl = form.thumbnailUrl || imageUrls[0] || '';
       const payload = {
         title: form.title.trim(),
         description: form.description.trim(),
@@ -1181,40 +1311,49 @@ function EventManagementView({ showMessage }: { showMessage: (text: string, tone
         endAt: new Date(form.endAt).toISOString(),
         organizer: form.organizer.trim(),
         contactInfo: form.contactInfo.trim() || null,
-        imageUrls: form.imageUrls,
-        thumbnailUrl: form.thumbnailUrl,
+        imageUrls,
+        thumbnailUrl,
         order: form.order
       };
       if (form.id) {
         await api(`/api/admin/events/${form.id}`, { method: 'PATCH', body: JSON.stringify(payload) });
-        showMessage('Da cap nhat su kien');
+        showMessage('Đã cập nhật sự kiện');
       } else {
         await api('/api/admin/events', { method: 'POST', body: JSON.stringify(payload) });
-        showMessage('Da tao su kien');
+        showMessage('Đã tạo sự kiện');
       }
       resetForm();
       await loadEvents();
     } catch (err) {
-      showMessage(err instanceof Error ? err.message : 'Khong the luu su kien', 'error');
+      showMessage(err instanceof Error ? err.message : 'Không thể lưu sự kiện', 'error');
     } finally {
-      setSaving(false);
+      setSubmitting(false);
     }
   };
 
   const uploadImages = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
-    setSaving(true);
+    setUploadingEventImages(true);
     try {
       const urls = await uploadEventImages(Array.from(files));
       setForm(prev => {
         const imageUrls = Array.from(new Set([...prev.imageUrls, ...urls]));
         return { ...prev, imageUrls, thumbnailUrl: prev.thumbnailUrl || imageUrls[0] || '' };
       });
-      showMessage('Da tai anh su kien');
+      showMessage('Đã tải ảnh sự kiện');
     } catch (err) {
-      showMessage(err instanceof Error ? err.message : 'Khong the tai anh', 'error');
+      showMessage(err instanceof Error ? err.message : 'Không thể tải ảnh', 'error');
     } finally {
-      setSaving(false);
+      setUploadingEventImages(false);
+    }
+  };
+
+  const uploadDescriptionImages = async (files: File[]) => {
+    setUploadingDescriptionImage(true);
+    try {
+      return await uploadEventImages(files);
+    } finally {
+      setUploadingDescriptionImage(false);
     }
   };
 
@@ -1235,15 +1374,15 @@ function EventManagementView({ showMessage }: { showMessage: (text: string, tone
       showMessage(message);
       await loadEvents();
     } catch (err) {
-      showMessage(err instanceof Error ? err.message : 'Thao tac that bai', 'error');
+      showMessage(err instanceof Error ? err.message : 'Thao tác thất bại', 'error');
     }
   };
 
   const summary = [
-    { label: 'Tong su kien', value: events.length.toLocaleString('vi-VN'), icon: CalendarDays, accent: 'blue' },
-    { label: 'Hoat dong', value: events.filter(item => item.status === 'PUBLISHED').length.toLocaleString('vi-VN'), icon: CheckCircle, accent: 'green' },
-    { label: 'Ban nhap', value: events.filter(item => item.status === 'DRAFT').length.toLocaleString('vi-VN'), icon: ClipboardList, accent: 'purple' },
-    { label: 'Da dong', value: events.filter(item => item.status === 'CLOSED').length.toLocaleString('vi-VN'), icon: Shield, accent: 'orange' }
+    { label: 'Tổng sự kiện', value: events.length.toLocaleString('vi-VN'), icon: CalendarDays, accent: 'blue' },
+    { label: 'Hoạt động', value: events.filter(item => item.status === 'PUBLISHED').length.toLocaleString('vi-VN'), icon: CheckCircle, accent: 'green' },
+    { label: 'Bản nháp', value: events.filter(item => item.status === 'DRAFT').length.toLocaleString('vi-VN'), icon: ClipboardList, accent: 'purple' },
+    { label: 'Đã đóng', value: events.filter(item => item.status === 'CLOSED').length.toLocaleString('vi-VN'), icon: Shield, accent: 'orange' }
   ] as const;
 
   return (
@@ -1256,42 +1395,48 @@ function EventManagementView({ showMessage }: { showMessage: (text: string, tone
         <div className="toolbar glass-card">
           <div className="search-box">
             <Search size={20} />
-            <input value={search} onChange={event => setSearch(event.target.value)} placeholder="Tim tieu de, dia diem, don vi to chuc..." />
+            <input value={search} onChange={event => setSearch(event.target.value)} placeholder="Tìm tiêu đề, địa điểm, đơn vị tổ chức..." />
           </div>
           <div className="filter-group">
             <ListFilter size={20} />
-            <Select value={statusFilter} onChange={setStatusFilter} ariaLabel="Loc trang thai su kien">
-              <option value="ALL">Tat ca trang thai</option>
-              <option value="PUBLISHED">Hoat dong</option>
-              <option value="DRAFT">Nhap</option>
-              <option value="CLOSED">Da dong</option>
+            <Select value={statusFilter} onChange={setStatusFilter} ariaLabel="Lọc trạng thái sự kiện">
+              <option value="ALL">Tất cả trạng thái</option>
+              <option value="PUBLISHED">Hoạt động</option>
+              <option value="DRAFT">Nháp</option>
+              <option value="CLOSED">Đã đóng</option>
             </Select>
           </div>
-          <button className="text-button" onClick={loadEvents} disabled={loading}><RefreshCw size={17} /> Lam moi</button>
+          <button className="text-button" onClick={loadEvents} disabled={loading}><RefreshCw size={17} /> Làm mới</button>
         </div>
 
         <section className="table-card glass-card">
           <div className="section-heading">
             <div>
-              <p className="eyebrow">Noi dung su kien</p>
-              <h2>Danh sach su kien</h2>
+              <p className="eyebrow">Nội dung sự kiện</p>
+              <h2>Danh sách sự kiện</h2>
             </div>
-            <button className="primary-button compact" onClick={resetForm}><Plus size={18} /> Them su kien</button>
+            <button className="primary-button compact" onClick={resetForm}><Plus size={18} /> Thêm sự kiện</button>
           </div>
           {events.length > 0 ? (
             <>
               <div className="question-table event-table">
                 <div className="table-row table-head">
-                  <span>Su kien</span>
-                  <span>Thoi gian</span>
-                  <span>Danh muc</span>
-                  <span>Trang thai</span>
-                  <span>Thao tac</span>
+                  <span>Sự kiện</span>
+                  <span>Thời gian</span>
+                  <span>Danh mục</span>
+                  <span>Trạng thái</span>
+                  <span>Thao tác</span>
                 </div>
                 {events.map(item => (
                   <div className="table-row" key={item.id}>
                     <div className="event-cell">
-                      <img src={item.thumbnailUrl} alt={item.title} />
+                      {item.thumbnailUrl ? (
+                        <img src={item.thumbnailUrl} alt={item.title} />
+                      ) : (
+                        <div className="event-thumb-placeholder" aria-label="Chưa có ảnh đại diện">
+                          <ImageIcon size={22} />
+                        </div>
+                      )}
                       <div className="question-cell">
                         <strong>{item.title}</strong>
                         <small>{item.location} - {item.organizer}</small>
@@ -1301,19 +1446,19 @@ function EventManagementView({ showMessage }: { showMessage: (text: string, tone
                     <span className="chip">{eventCategoryLabel(item.category)}</span>
                     <StatusBadge status={item.status} />
                     <div className="row-actions">
-                      <button className="icon-button" onClick={() => editEvent(item)} aria-label="Sua su kien"><Edit size={18} /></button>
-                      {item.status !== 'PUBLISHED' && <button className="icon-button" onClick={() => runAction(() => api(`/api/admin/events/${item.id}/publish`, { method: 'POST' }), 'Da xuat ban su kien')} aria-label="Xuat ban"><CheckCircle size={18} /></button>}
-                      {item.status === 'PUBLISHED' && <button className="icon-button" onClick={() => runAction(() => api(`/api/admin/events/${item.id}/close`, { method: 'POST' }), 'Da dong su kien')} aria-label="Dong"><Shield size={18} /></button>}
-                      <button className="icon-button danger" onClick={() => runAction(() => api(`/api/admin/events/${item.id}`, { method: 'DELETE' }), 'Da luu tru su kien')} aria-label="Luu tru"><Trash2 size={18} /></button>
+                      <button className="icon-button" onClick={() => editEvent(item)} aria-label="Sửa sự kiện"><Edit size={18} /></button>
+                      {item.status !== 'PUBLISHED' && <button className="icon-button" onClick={() => runAction(() => api(`/api/admin/events/${item.id}/publish`, { method: 'POST' }), 'Đã xuất bản sự kiện')} aria-label="Xuất bản"><CheckCircle size={18} /></button>}
+                      {item.status === 'PUBLISHED' && <button className="icon-button" onClick={() => runAction(() => api(`/api/admin/events/${item.id}/close`, { method: 'POST' }), 'Đã đóng sự kiện')} aria-label="Đóng"><Shield size={18} /></button>}
+                      <button className="icon-button danger" onClick={() => runAction(() => api(`/api/admin/events/${item.id}`, { method: 'DELETE' }), 'Đã lưu trữ sự kiện')} aria-label="Lưu trữ"><Trash2 size={18} /></button>
                     </div>
                   </div>
                 ))}
               </div>
               <div className="table-footer">
-                <span>Hien thi {events.length} su kien</span>
+                <span>Hiển thị {events.length} sự kiện</span>
               </div>
             </>
-          ) : <EmptyState title="Chua co su kien" description="Tao su kien dau tien va xuat ban de hien thi tren Mini App." actionLabel="Them su kien" onAction={resetForm} />}
+          ) : <EmptyState title="Chưa có sự kiện" description="Tạo sự kiện đầu tiên và xuất bản để hiển thị trên Mini App." actionLabel="Thêm sự kiện" onAction={resetForm} />}
         </section>
       </section>
 
@@ -1321,54 +1466,62 @@ function EventManagementView({ showMessage }: { showMessage: (text: string, tone
         <form className="glass-card management-card event-form" onSubmit={submitForm}>
           <div className="section-heading tight">
             <div>
-              <p className="eyebrow">{form.id ? 'Cap nhat' : 'Tao moi'}</p>
-              <h2>{form.id ? 'Sua su kien' : 'Them su kien'}</h2>
+              <p className="eyebrow">{form.id ? 'Cập nhật' : 'Tạo mới'}</p>
+              <h2>{form.id ? 'Sửa sự kiện' : 'Thêm sự kiện'}</h2>
             </div>
-            {form.id && <button type="button" className="icon-button" onClick={resetForm} aria-label="Tao moi"><Plus size={18} /></button>}
+            {form.id && <button type="button" className="icon-button" onClick={resetForm} aria-label="Tạo mới"><Plus size={18} /></button>}
           </div>
 
-          <label>Tieu de
+          <label>Tiêu đề
             <input required value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} />
           </label>
-          <label>Mo ta HTML
-            <textarea required value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={6} />
-          </label>
-          <label>Danh muc
-            <Select value={form.category} onChange={value => setForm({ ...form, category: value as EventCategory })} ariaLabel="Danh muc su kien">
-              <option value="VAN_HOA">Van hoa</option>
-              <option value="THE_THAO">The thao</option>
-              <option value="HANH_CHINH">Hanh chinh</option>
-              <option value="LE_HOI">Le hoi</option>
-              <option value="KHAC">Khac</option>
+          <div className="event-form-field">
+            <span>Mô tả</span>
+            <EventDescriptionEditor
+              value={form.description}
+              disabled={submitting}
+              onChange={description => setForm(prev => ({ ...prev, description }))}
+              onUploadImage={uploadDescriptionImages}
+              showMessage={showMessage}
+            />
+            {uploadingDescriptionImage && <small className="field-hint">Đang tải ảnh mô tả...</small>}
+          </div>
+          <label>Danh mục
+            <Select value={form.category} onChange={value => setForm({ ...form, category: value as EventCategory })} ariaLabel="Danh mục sự kiện">
+              <option value="VAN_HOA">Văn hóa</option>
+              <option value="THE_THAO">Thể thao</option>
+              <option value="HANH_CHINH">Hành chính</option>
+              <option value="LE_HOI">Lễ hội</option>
+              <option value="KHAC">Khác</option>
             </Select>
           </label>
-          <label>Dia diem
+          <label>Địa điểm
             <input required value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} />
           </label>
           <div className="form-grid-two">
-            <label>Bat dau
+            <label>Bắt đầu
               <input required type="datetime-local" value={form.startAt} onChange={e => setForm({ ...form, startAt: e.target.value })} />
             </label>
-            <label>Ket thuc
+            <label>Kết thúc
               <input required type="datetime-local" value={form.endAt} onChange={e => setForm({ ...form, endAt: e.target.value })} />
             </label>
           </div>
-          <label>Don vi to chuc
+          <label>Đơn vị tổ chức
             <input required value={form.organizer} onChange={e => setForm({ ...form, organizer: e.target.value })} />
           </label>
-          <label>Lien he
+          <label>Liên hệ
             <input value={form.contactInfo} onChange={e => setForm({ ...form, contactInfo: e.target.value })} />
           </label>
-          <label>Thu tu uu tien
+          <label>Thứ tự ưu tiên
             <input type="number" min={0} value={form.order} onChange={e => setForm({ ...form, order: Number(e.target.value) })} />
           </label>
 
           <div className="event-upload-box">
             <label className="secondary-button">
-              <Upload size={18} /> Tai anh
-              <input type="file" accept="image/*" multiple hidden onChange={e => { uploadImages(e.target.files); e.currentTarget.value = ''; }} />
+              <Upload size={18} /> {uploadingEventImages ? 'Đang tải...' : 'Tải ảnh'}
+              <input type="file" accept="image/*" multiple hidden disabled={uploadingEventImages || submitting} onChange={e => { uploadImages(e.target.files); e.currentTarget.value = ''; }} />
             </label>
-            <span>{form.imageUrls.length}/10 anh</span>
+            <span>{form.imageUrls.length}/10 ảnh</span>
           </div>
 
           {form.imageUrls.length > 0 ? (
@@ -1379,15 +1532,15 @@ function EventManagementView({ showMessage }: { showMessage: (text: string, tone
                   <button type="button" className="image-select" onClick={() => setForm({ ...form, thumbnailUrl: url })}>
                     <ImageIcon size={14} /> Thumbnail
                   </button>
-                  <button type="button" className="image-remove" onClick={() => removeImage(url)} aria-label="Xoa anh"><X size={14} /></button>
+                  <button type="button" className="image-remove" onClick={() => removeImage(url)} aria-label="Xóa ảnh"><X size={14} /></button>
                 </div>
               ))}
             </div>
-          ) : <p className="muted">Chua co anh. Tai anh va chon thumbnail de co the xuat ban.</p>}
+          ) : <p className="muted">Chưa có ảnh. Tải ảnh và chọn thumbnail để có thể xuất bản.</p>}
 
           <div className="modal-footer">
-            <button type="button" className="secondary-button" onClick={resetForm}>Lam moi</button>
-            <button type="submit" className="primary-button" disabled={saving}>{saving ? 'Dang luu...' : 'Luu su kien'}</button>
+            <button type="button" className="secondary-button" onClick={resetForm}>Làm mới</button>
+            <button type="submit" className="primary-button" disabled={submitting}>{submitting ? 'Đang lưu...' : 'Lưu sự kiện'}</button>
           </div>
         </form>
       </aside>

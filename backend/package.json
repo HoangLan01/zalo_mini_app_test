@@ -26,6 +26,7 @@
     "jsonwebtoken": "^9.x",
     "multer": "^1.x",
     "node-cron": "^3.x",
+    "sanitize-html": "^2.17.4",
     "winston": "^3.x",
     "zod": "^3.x"
   },
@@ -37,6 +38,7 @@
     "@types/multer": "^1.x",
     "@types/node": "^20.x",
     "@types/node-cron": "^3.x",
+    "@types/sanitize-html": "^2.16.1",
     "prisma": "^5.x",
     "ts-node": "^10.x",
     "ts-node-dev": "^2.x",

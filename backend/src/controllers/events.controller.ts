@@ -4,8 +4,9 @@ import * as eventsService from '../services/events.service';
 const knownErrors: Record<string, { status: number; message: string }> = {
   EVENT_INVALID_DATE: { status: 400, message: 'Thời gian sự kiện không hợp lệ' },
   EVENT_INVALID_DATE_RANGE: { status: 400, message: 'Thời gian kết thúc phải sau thời gian bắt đầu' },
-  EVENT_MISSING_IMAGES: { status: 400, message: 'Sự kiện cần có ít nhất một ảnh trước khi xuất bản' },
-  EVENT_MISSING_THUMBNAIL: { status: 400, message: 'Vui lòng chọn ảnh thumbnail trước khi xuất bản' },
+  EVENT_MISSING_DESCRIPTION: { status: 400, message: 'Vui lòng nhập mô tả sự kiện' },
+  EVENT_MISSING_IMAGES: { status: 400, message: 'Vui lòng tải ảnh và chọn thumbnail trước khi xuất bản' },
+  EVENT_MISSING_THUMBNAIL: { status: 400, message: 'Vui lòng tải ảnh và chọn thumbnail trước khi xuất bản' },
   EVENT_THUMBNAIL_NOT_IN_IMAGES: { status: 400, message: 'Ảnh thumbnail phải nằm trong danh sách ảnh sự kiện' },
   NOT_FOUND: { status: 404, message: 'Không tìm thấy sự kiện' }
 };

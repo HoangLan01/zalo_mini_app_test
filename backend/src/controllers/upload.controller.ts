@@ -10,14 +10,14 @@ export const upload = async (req: Request, res: Response, next: NextFunction) =>
     if (!files || files.length === 0) {
       return res.status(400).json({
         success: false,
-        error: { code: 'INVALID_FILE', message: 'Vui long dinh kem file anh' }
+        error: { code: 'INVALID_FILE', message: 'Vui lòng đính kèm file ảnh' }
       });
     }
 
     if (purpose === 'event' && req.user?.role !== 'ADMIN') {
       return res.status(403).json({
         success: false,
-        error: { code: 'FORBIDDEN', message: 'Ban khong co quyen tai anh su kien' }
+        error: { code: 'FORBIDDEN', message: 'Bạn không có quyền tải ảnh sự kiện' }
       });
     }
 
@@ -30,10 +30,12 @@ export const upload = async (req: Request, res: Response, next: NextFunction) =>
       data: { urls }
     });
   } catch (error: any) {
-    if (error.message.includes('toi da') || error.message.includes('vuot qua') || error.message.includes('dinh dang')) {
+    const message = String(error.message || '');
+    if (message.includes('tối đa') || message.includes('vượt quá') || message.includes('định dạng') ||
+      message.includes('toi da') || message.includes('vuot qua') || message.includes('dinh dang')) {
       return res.status(400).json({
         success: false,
-        error: { code: 'INVALID_FILE', message: error.message }
+        error: { code: 'INVALID_FILE', message }
       });
     }
     next(error);

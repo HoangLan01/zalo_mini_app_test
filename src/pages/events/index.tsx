@@ -5,9 +5,9 @@ import PageHeader from '@/components/PageHeader';
 import { eventCategoryLabel, PublicEventStatus, useEventStore } from '@/store/eventStore';
 
 const statusTabs: Array<{ key: PublicEventStatus; label: string }> = [
-  { key: 'upcoming', label: 'Sap dien ra' },
-  { key: 'ongoing', label: 'Dang dien ra' },
-  { key: 'past', label: 'Da ket thuc' }
+  { key: 'upcoming', label: 'Sắp diễn ra' },
+  { key: 'ongoing', label: 'Đang diễn ra' },
+  { key: 'past', label: 'Đã kết thúc' }
 ];
 
 const formatDateTime = (value: string) => new Intl.DateTimeFormat('vi-VN', {
@@ -29,7 +29,7 @@ const EventsIndexPage: React.FC = () => {
 
   return (
     <Page className="page" style={{ backgroundColor: 'var(--surface)', height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <PageHeader title="Su kien" />
+      <PageHeader title="Sự kiện" />
 
       <div style={{ padding: '12px 16px 16px', background: 'var(--gradient-hero)' }}>
         <div style={{
@@ -65,7 +65,7 @@ const EventsIndexPage: React.FC = () => {
       <Box style={{ flex: 1, overflow: 'auto', padding: '16px', paddingBottom: '160px' }}>
         {isLoading && (
           <Box style={{ textAlign: 'center', marginTop: '40px' }}>
-            <Text style={{ color: 'var(--text-muted)' }}>Dang tai su kien...</Text>
+            <Text style={{ color: 'var(--text-muted)' }}>Đang tải sự kiện...</Text>
           </Box>
         )}
 
@@ -80,7 +80,7 @@ const EventsIndexPage: React.FC = () => {
             {events.map((item, idx) => (
               <div
                 key={item.id}
-                onClick={() => navigate('/events-detail', { state: { id: item.id } })}
+                onClick={() => navigate(`/events-detail?id=${encodeURIComponent(item.id)}`, { state: { id: item.id } })}
                 className={`card-elevated active-scale animate-fade-in-up delay-${Math.min((idx + 1) * 100, 400)}`}
                 style={{ overflow: 'hidden', cursor: 'pointer', borderRadius: 'var(--radius-xl)' }}
               >
@@ -118,7 +118,7 @@ const EventsIndexPage: React.FC = () => {
 
             {events.length === 0 && (
               <Box style={{ textAlign: 'center', marginTop: '40px' }}>
-                <Text style={{ color: 'var(--text-muted)' }}>Chua co su kien phu hop.</Text>
+                <Text style={{ color: 'var(--text-muted)' }}>Chưa có sự kiện phù hợp.</Text>
               </Box>
             )}
           </div>

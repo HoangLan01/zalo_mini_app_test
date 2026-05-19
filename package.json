@@ -23,6 +23,7 @@
   "homepage": "https://gitlab.com/teik_1b/mini-app-education#readme",
   "dependencies": {
     "axios": "1.13.6",
+    "dompurify": "^3.4.5",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-transition-group": "^4.4.5",

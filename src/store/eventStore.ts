@@ -36,11 +36,11 @@ interface EventState {
 
 export const eventCategoryLabel = (category: EventCategory) => {
   const labels: Record<EventCategory, string> = {
-    VAN_HOA: 'Van hoa',
-    THE_THAO: 'The thao',
-    HANH_CHINH: 'Hanh chinh',
-    LE_HOI: 'Le hoi',
-    KHAC: 'Khac'
+    VAN_HOA: 'Văn hóa',
+    THE_THAO: 'Thể thao',
+    HANH_CHINH: 'Hành chính',
+    LE_HOI: 'Lễ hội',
+    KHAC: 'Khác'
   };
   return labels[category] || category;
 };
