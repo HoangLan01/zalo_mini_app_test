@@ -1246,6 +1246,7 @@ function EventManagementView({ showMessage }: { showMessage: (text: string, tone
   const [uploadingEventImages, setUploadingEventImages] = useState(false);
   const [uploadingDescriptionImage, setUploadingDescriptionImage] = useState(false);
   const [form, setForm] = useState<EventFormState>(() => emptyEventForm());
+  const [isEventModalOpen, setIsEventModalOpen] = useState(false);
 
   const loadEvents = useCallback(async () => {
     setLoading(true);
@@ -1267,7 +1268,14 @@ function EventManagementView({ showMessage }: { showMessage: (text: string, tone
     loadEvents();
   }, [loadEvents]);
 
-  const editEvent = (event: ManagedEvent) => {
+  const resetForm = () => setForm(emptyEventForm());
+
+  const openCreateEventModal = () => {
+    setForm(emptyEventForm());
+    setIsEventModalOpen(true);
+  };
+
+  const openEditEventModal = (event: ManagedEvent) => {
     setForm({
       id: event.id,
       title: event.title,
@@ -1282,9 +1290,14 @@ function EventManagementView({ showMessage }: { showMessage: (text: string, tone
       thumbnailUrl: event.thumbnailUrl,
       order: event.order || 0
     });
+    setIsEventModalOpen(true);
   };
 
-  const resetForm = () => setForm(emptyEventForm());
+  const closeEventModal = () => {
+    if (submitting || uploadingEventImages || uploadingDescriptionImage) return;
+    setIsEventModalOpen(false);
+    resetForm();
+  };
 
   const validateForm = () => {
     if (!form.title.trim() || !getTextFromHtml(form.description) || !form.location.trim() || !form.organizer.trim()) {
@@ -1322,6 +1335,7 @@ function EventManagementView({ showMessage }: { showMessage: (text: string, tone
         await api('/api/admin/events', { method: 'POST', body: JSON.stringify(payload) });
         showMessage('Đã tạo sự kiện');
       }
+      setIsEventModalOpen(false);
       resetForm();
       await loadEvents();
     } catch (err) {
@@ -1386,7 +1400,7 @@ function EventManagementView({ showMessage }: { showMessage: (text: string, tone
   ] as const;
 
   return (
-    <div className="bank-layout">
+    <div className="event-management-layout">
       <section className="main-column">
         <div className="stats-grid">
           {summary.map(stat => <StatCard key={stat.label} {...stat} />)}
@@ -1415,7 +1429,7 @@ function EventManagementView({ showMessage }: { showMessage: (text: string, tone
               <p className="eyebrow">Nội dung sự kiện</p>
               <h2>Danh sách sự kiện</h2>
             </div>
-            <button className="primary-button compact" onClick={resetForm}><Plus size={18} /> Thêm sự kiện</button>
+            <button className="primary-button compact" onClick={openCreateEventModal}><Plus size={18} /> Thêm sự kiện</button>
           </div>
           {events.length > 0 ? (
             <>
@@ -1446,7 +1460,7 @@ function EventManagementView({ showMessage }: { showMessage: (text: string, tone
                     <span className="chip">{eventCategoryLabel(item.category)}</span>
                     <StatusBadge status={item.status} />
                     <div className="row-actions">
-                      <button className="icon-button" onClick={() => editEvent(item)} aria-label="Sửa sự kiện"><Edit size={18} /></button>
+                      <button className="icon-button" onClick={() => openEditEventModal(item)} aria-label="Sửa sự kiện"><Edit size={18} /></button>
                       {item.status !== 'PUBLISHED' && <button className="icon-button" onClick={() => runAction(() => api(`/api/admin/events/${item.id}/publish`, { method: 'POST' }), 'Đã xuất bản sự kiện')} aria-label="Xuất bản"><CheckCircle size={18} /></button>}
                       {item.status === 'PUBLISHED' && <button className="icon-button" onClick={() => runAction(() => api(`/api/admin/events/${item.id}/close`, { method: 'POST' }), 'Đã đóng sự kiện')} aria-label="Đóng"><Shield size={18} /></button>}
                       <button className="icon-button danger" onClick={() => runAction(() => api(`/api/admin/events/${item.id}`, { method: 'DELETE' }), 'Đã lưu trữ sự kiện')} aria-label="Lưu trữ"><Trash2 size={18} /></button>
@@ -1458,20 +1472,17 @@ function EventManagementView({ showMessage }: { showMessage: (text: string, tone
                 <span>Hiển thị {events.length} sự kiện</span>
               </div>
             </>
-          ) : <EmptyState title="Chưa có sự kiện" description="Tạo sự kiện đầu tiên và xuất bản để hiển thị trên Mini App." actionLabel="Thêm sự kiện" onAction={resetForm} />}
+          ) : <EmptyState title="Chưa có sự kiện" description="Tạo sự kiện đầu tiên và xuất bản để hiển thị trên Mini App." actionLabel="Thêm sự kiện" onAction={openCreateEventModal} />}
         </section>
       </section>
 
-      <aside className="side-column">
-        <form className="glass-card management-card event-form" onSubmit={submitForm}>
-          <div className="section-heading tight">
-            <div>
-              <p className="eyebrow">{form.id ? 'Cập nhật' : 'Tạo mới'}</p>
-              <h2>{form.id ? 'Sửa sự kiện' : 'Thêm sự kiện'}</h2>
-            </div>
-            {form.id && <button type="button" className="icon-button" onClick={resetForm} aria-label="Tạo mới"><Plus size={18} /></button>}
-          </div>
-
+      <Modal
+        isOpen={isEventModalOpen}
+        onClose={closeEventModal}
+        title={form.id ? 'Sửa sự kiện' : 'Thêm sự kiện'}
+        className="event-modal"
+      >
+        <form className="event-form event-modal-form" onSubmit={submitForm}>
           <label>Tiêu đề
             <input required value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} />
           </label>
@@ -1543,7 +1554,7 @@ function EventManagementView({ showMessage }: { showMessage: (text: string, tone
             <button type="submit" className="primary-button" disabled={submitting}>{submitting ? 'Đang lưu...' : 'Lưu sự kiện'}</button>
           </div>
         </form>
-      </aside>
+      </Modal>
     </div>
   );
 }
@@ -2034,11 +2045,24 @@ function Notice({ tone, message, onClose }: { tone: 'info' | 'error'; message: s
   );
 }
 
-function Modal({ isOpen, onClose, title, children }: { isOpen: boolean; onClose: () => void; title: string; children: React.ReactNode }) {
+function Modal({
+  isOpen,
+  onClose,
+  title,
+  children,
+  className = ''
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  title: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
   if (!isOpen) return null;
+  const contentClassName = className ? `modal-content ${className}` : 'modal-content';
   return (
     <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal-content">
+      <div className={contentClassName}>
         <div className="modal-header">
           <h2>{title}</h2>
           <button className="icon-button ghost" onClick={onClose}><X size={20} /></button>
