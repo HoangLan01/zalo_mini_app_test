@@ -53,7 +53,8 @@ const sanitizeEventDescription = (description: string) => {
     allowedAttributes: {}
   }).replace(/\s+/g, ' ').trim();
 
-  if (!textContent) throw new Error('EVENT_MISSING_DESCRIPTION');
+  const hasImage = /<img\b[^>]*\bsrc=(["'])https?:\/\/[^"']+\1/i.test(sanitized);
+  if (!textContent && !hasImage) throw new Error('EVENT_MISSING_DESCRIPTION');
   return sanitized;
 };
 

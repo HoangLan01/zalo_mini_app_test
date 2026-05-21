@@ -256,6 +256,21 @@ const getTextFromHtml = (html: string) => {
   return (doc.body.textContent || '').replace(/\s+/g, ' ').trim();
 };
 
+const getImageSourcesFromHtml = (html: string) => {
+  const doc = new DOMParser().parseFromString(html || '', 'text/html');
+  return Array.from(doc.body.querySelectorAll('img'))
+    .map(img => img.getAttribute('src')?.trim())
+    .filter((src): src is string => Boolean(src));
+};
+
+const hasDescriptionContent = (html: string) => {
+  return Boolean(getTextFromHtml(html) || getImageSourcesFromHtml(html).length);
+};
+
+const hasImageSource = (html: string, src: string) => {
+  return getImageSourcesFromHtml(html).includes(src);
+};
+
 function EventDescriptionEditor({
   value,
   disabled,
@@ -271,6 +286,7 @@ function EventDescriptionEditor({
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -328,15 +344,25 @@ function EventDescriptionEditor({
 
   const insertImage = async (files: FileList | null) => {
     if (!editor || !files || files.length === 0) return;
+    const file = files.item(0);
+    if (!file) return;
     setUploading(true);
+    setUploadError('');
     try {
-      const [url] = await onUploadImage([files[0]]);
-      if (url) {
-        editor.chain().focus().setImage({ src: url, alt: files[0].name }).run();
-        showMessage('Đã chèn ảnh vào mô tả');
+      const urls = await onUploadImage([file]);
+      const url = urls.find(item => item?.trim())?.trim();
+      if (!url) {
+        throw new Error('Upload ảnh không trả về đường dẫn hợp lệ');
       }
+      const inserted = editor.chain().focus().setImage({ src: url, alt: file.name }).run();
+      if (!inserted || !hasImageSource(editor.getHTML(), url)) {
+        throw new Error('Không thể chèn ảnh vào mô tả');
+      }
+      showMessage('Đã chèn ảnh vào mô tả');
     } catch (err) {
-      showMessage(err instanceof Error ? err.message : 'Không thể chèn ảnh vào mô tả', 'error');
+      const message = err instanceof Error ? err.message : 'Không thể chèn ảnh vào mô tả';
+      setUploadError(message);
+      showMessage(message, 'error');
     } finally {
       setUploading(false);
     }
@@ -361,6 +387,7 @@ function EventDescriptionEditor({
       </div>
       <EditorContent editor={editor} />
       <p className="editor-help">{uploading ? 'Đang tải ảnh...' : 'Nhập mô tả như văn bản thường, dùng thanh công cụ để định dạng.'}</p>
+      {uploadError && <p className="editor-error">{uploadError}</p>}
     </div>
   );
 }
@@ -1300,7 +1327,7 @@ function EventManagementView({ showMessage }: { showMessage: (text: string, tone
   };
 
   const validateForm = () => {
-    if (!form.title.trim() || !getTextFromHtml(form.description) || !form.location.trim() || !form.organizer.trim()) {
+    if (!form.title.trim() || !hasDescriptionContent(form.description) || !form.location.trim() || !form.organizer.trim()) {
       throw new Error('Nhập đầy đủ tiêu đề, mô tả, địa điểm và đơn vị tổ chức');
     }
     if (!form.startAt || !form.endAt) throw new Error('Nhập đầy đủ thời gian bắt đầu và kết thúc');
@@ -1310,6 +1337,10 @@ function EventManagementView({ showMessage }: { showMessage: (text: string, tone
 
   const submitForm = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (uploadingDescriptionImage) {
+      showMessage('Vui lòng đợi tải ảnh mô tả hoàn tất trước khi lưu sự kiện', 'error');
+      return;
+    }
     setSubmitting(true);
     try {
       validateForm();
@@ -1551,7 +1582,9 @@ function EventManagementView({ showMessage }: { showMessage: (text: string, tone
 
           <div className="modal-footer">
             <button type="button" className="secondary-button" onClick={resetForm}>Làm mới</button>
-            <button type="submit" className="primary-button" disabled={submitting}>{submitting ? 'Đang lưu...' : 'Lưu sự kiện'}</button>
+            <button type="submit" className="primary-button" disabled={submitting || uploadingDescriptionImage}>
+              {submitting ? 'Đang lưu...' : uploadingDescriptionImage ? 'Đang tải ảnh...' : 'Lưu sự kiện'}
+            </button>
           </div>
         </form>
       </Modal>
