@@ -1,59 +1,197 @@
-import React, { useEffect, useState } from 'react';
-import { Page, Box, Text, Swiper } from 'zmp-ui';
-import { useNavigate } from 'zmp-ui';
-import { useUserStore } from '@/store/userStore';
-import { apiCall } from '@/services/api';
+import React, { useLayoutEffect } from 'react';
+import { Page, Text, useNavigate } from 'zmp-ui';
 import { openChat } from 'zmp-sdk/apis';
-import logo from '@/assets/logo.jpg';
-import bannerFit from '@/assets/banner_fit.png';
 
-const getGreeting = () => {
-  const h = new Date().getHours();
-  if (h < 12) return 'Chào buổi sáng';
-  if (h < 18) return 'Chào buổi chiều';
-  return 'Chào buổi tối';
+import wardLogo from '../../../images/anh_logo.jpg';
+import { useUserStore } from '@/store/userStore';
+import {
+  consumeHomeScrollRestoration,
+  restoreHomeScrollPosition,
+  saveHomeScrollPosition,
+} from '@/utils/homeScrollRestoration';
+
+type IconName =
+  | 'home'
+  | 'badge'
+  | 'megaphone'
+  | 'calendar'
+  | 'chat'
+  | 'file'
+  | 'heart'
+  | 'medical'
+  | 'education'
+  | 'globe'
+  | 'spark'
+  | 'landmark'
+  | 'bulb'
+  | 'map'
+  | 'arrow'
+  | 'lock';
+
+const Icon = ({ name, size = 20 }: { name: IconName; size?: number }) => {
+  const common = {
+    width: size,
+    height: size,
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 2,
+    strokeLinecap: 'round' as const,
+    strokeLinejoin: 'round' as const,
+    'aria-hidden': true,
+  };
+
+  const icons: Record<IconName, React.ReactNode> = {
+    home: (
+      <>
+        <path d="M3 10.5 12 3l9 7.5" />
+        <path d="M5 10v10h14V10" />
+        <path d="M9 20v-6h6v6" />
+      </>
+    ),
+    badge: (
+      <>
+        <path d="M12 3 4.5 6v5.5c0 4.4 3 7.2 7.5 9.5 4.5-2.3 7.5-5.1 7.5-9.5V6L12 3Z" />
+        <path d="m9.5 12 1.7 1.7 3.8-4" />
+      </>
+    ),
+    megaphone: (
+      <>
+        <path d="M3 11v2a2 2 0 0 0 2 2h2l9 4V5L7 9H5a2 2 0 0 0-2 2Z" />
+        <path d="M19 8a4 4 0 0 1 0 8" />
+        <path d="M7 15v4" />
+      </>
+    ),
+    calendar: (
+      <>
+        <path d="M7 3v4" />
+        <path d="M17 3v4" />
+        <rect x="4" y="5" width="16" height="16" rx="3" />
+        <path d="M4 10h16" />
+        <path d="M8 14h3" />
+        <path d="M13 14h3" />
+      </>
+    ),
+    chat: (
+      <>
+        <path d="M21 14a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4Z" />
+        <path d="M8 9h8" />
+        <path d="M8 13h5" />
+      </>
+    ),
+    file: (
+      <>
+        <path d="M7 3h7l4 4v14H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" />
+        <path d="M14 3v5h5" />
+        <path d="M9 13h6" />
+        <path d="M9 17h4" />
+      </>
+    ),
+    heart: (
+      <>
+        <path d="M20 11.5V20H4v-8.5" />
+        <path d="m4 12 8-8 8 8" />
+        <path d="M9 14h6" />
+        <path d="M12 11v6" />
+      </>
+    ),
+    medical: (
+      <>
+        <rect x="4" y="7" width="16" height="13" rx="3" />
+        <path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+        <path d="M12 11v5" />
+        <path d="M9.5 13.5h5" />
+      </>
+    ),
+    education: (
+      <>
+        <path d="m3 8 9-4 9 4-9 4-9-4Z" />
+        <path d="M7 10.5v4.2c1.6 1.2 3.2 1.8 5 1.8s3.4-.6 5-1.8v-4.2" />
+        <path d="M21 8v6" />
+      </>
+    ),
+    globe: (
+      <>
+        <circle cx="12" cy="12" r="9" />
+        <path d="M3 12h18" />
+        <path d="M12 3c2.2 2.5 3.3 5.5 3.3 9S14.2 18.5 12 21" />
+        <path d="M12 3c-2.2 2.5-3.3 5.5-3.3 9S9.8 18.5 12 21" />
+      </>
+    ),
+    spark: (
+      <>
+        <path d="M12 2v5" />
+        <path d="M12 17v5" />
+        <path d="m4.9 4.9 3.5 3.5" />
+        <path d="m15.6 15.6 3.5 3.5" />
+        <path d="M2 12h5" />
+        <path d="M17 12h5" />
+        <path d="m4.9 19.1 3.5-3.5" />
+        <path d="m15.6 8.4 3.5-3.5" />
+      </>
+    ),
+    landmark: (
+      <>
+        <path d="m4 10 8-5 8 5" />
+        <path d="M5 10h14" />
+        <path d="M7 10v8" />
+        <path d="M12 10v8" />
+        <path d="M17 10v8" />
+        <path d="M4 18h16" />
+      </>
+    ),
+    bulb: (
+      <>
+        <path d="M9 18h6" />
+        <path d="M10 22h4" />
+        <path d="M8.2 14.8a6 6 0 1 1 7.6 0c-.8.6-.8 1.2-.8 2.2H9c0-1 0-1.6-.8-2.2Z" />
+      </>
+    ),
+    map: (
+      <>
+        <path d="m9 18-6 3V6l6-3 6 3 6-3v15l-6 3-6-3Z" />
+        <path d="M9 3v15" />
+        <path d="M15 6v15" />
+      </>
+    ),
+    arrow: <path d="M5 12h14m-6-6 6 6-6 6" />,
+    lock: (
+      <>
+        <rect x="5" y="10" width="14" height="11" rx="2" />
+        <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+      </>
+    ),
+  };
+
+  return <svg {...common}>{icons[name]}</svg>;
 };
 
-// --- Inline SVG Icons for premium feel ---
-const SvgIcon = ({ children, color = '#fff' }: { children: React.ReactNode; color?: string }) => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    {children}
-  </svg>
-);
+const getGreeting = () => {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Chào buổi sáng,';
+  if (hour < 18) return 'Chào buổi chiều,';
+  return 'Chào buổi tối,';
+};
 
-const IconMegaphone = ({ color }: { color?: string }) => (
-  <SvgIcon color={color}><path d="M3 11l18-5v12L3 13v-2z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></SvgIcon>
-);
-const IconCalendar = ({ color }: { color?: string }) => (
-  <SvgIcon color={color}><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></SvgIcon>
-);
-const IconClipboard = ({ color }: { color?: string }) => (
-  <SvgIcon color={color}><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></SvgIcon>
-);
-const IconStar = ({ color }: { color?: string }) => (
-  <SvgIcon color={color}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></SvgIcon>
-);
-const IconBuilding = ({ color }: { color?: string }) => (
-  <SvgIcon color={color}><rect x="4" y="2" width="16" height="20" rx="2" ry="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01"/><path d="M16 6h.01"/><path d="M12 6h.01"/><path d="M12 10h.01"/><path d="M12 14h.01"/><path d="M16 10h.01"/><path d="M16 14h.01"/><path d="M8 10h.01"/><path d="M8 14h.01"/></SvgIcon>
-);
-const IconShield = ({ color }: { color?: string }) => (
-  <SvgIcon color={color}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></SvgIcon>
-);
-const IconChat = ({ color }: { color?: string }) => (
-  <SvgIcon color={color}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></SvgIcon>
-);
+const getGreetingName = (name?: string) => name || 'Công dân Tùng Thiện';
 
 const IndexPage: React.FC = () => {
   const navigate = useNavigate();
   const { userInfo } = useUserStore();
-  const [banners, setBanners] = useState<any[]>([]);
+  const citizenName = getGreetingName(userInfo?.name);
+  const shouldAnimateName = citizenName.length > 18;
 
-  useEffect(() => {
-    setBanners([
-      { id: 1, img: bannerFit },
-      { id: 2, img: 'https://images.unsplash.com/photo-1546422904-90eab23c3d7e?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80' }
-    ]);
+  useLayoutEffect(() => {
+    const scrollTop = consumeHomeScrollRestoration();
+    if (scrollTop !== null) {
+      restoreHomeScrollPosition(scrollTop);
+    }
   }, []);
+
+  const navigateFromHome = (path: string, state?: Record<string, unknown>) => {
+    saveHomeScrollPosition();
+    navigate(path, state ? { state } : undefined);
+  };
 
   const handleOpenChat = async () => {
     try {
@@ -63,244 +201,203 @@ const IndexPage: React.FC = () => {
         message: 'Xin chào, tôi cần hỗ trợ',
       });
     } catch (error) {
-      // Fallback cho trình duyệt Web/PC
       const oaId = import.meta.env.VITE_ZALO_OA_ID;
       window.open(`https://zalo.me/${oaId}`, '_blank');
     }
   };
 
   const quickActions = [
-    { title: 'Phản ánh', icon: <IconMegaphone />, onClick: () => navigate('/feedback'), gradient: 'linear-gradient(135deg, #FF6B6B, #EE5A24)' },
-    { title: 'Đặt lịch', icon: <IconCalendar />, onClick: () => navigate('/booking'), gradient: 'linear-gradient(135deg, #246BFD, #7C5CFC)' },
-    { title: 'Nhắn OA', icon: <IconChat />, onClick: handleOpenChat, gradient: 'linear-gradient(135deg, #10B981, #059669)' },
+    {
+      title: 'Phản ánh',
+      subtitle: 'Kiến nghị',
+      icon: 'megaphone' as IconName,
+      tone: 'blue',
+      onClick: () => navigateFromHome('/feedback'),
+    },
+    {
+      title: 'Đặt lịch',
+      subtitle: 'Làm việc',
+      icon: 'calendar' as IconName,
+      tone: 'warm',
+      onClick: () => navigateFromHome('/booking'),
+    },
+    {
+      title: 'Nhắn OA',
+      subtitle: 'Trực tuyến',
+      icon: 'chat' as IconName,
+      tone: 'mint',
+      onClick: handleOpenChat,
+    },
   ];
 
-  const mainServices = [
-    { title: 'Phản ánh', icon: <IconMegaphone color="#FF6B6B" />, path: '/feedback', bgColor: '#FFF0F0', borderColor: '#FFD4D4' },
-    { title: 'Đặt lịch', icon: <IconCalendar color="#246BFD" />, path: '/booking', bgColor: '#EEF4FF', borderColor: '#D4E4FF' },
-    { title: 'Dịch vụ công', icon: <IconClipboard color="#7C5CFC" />, path: '/dvc', bgColor: '#F3EEFF', borderColor: '#E0D4FF' },
-    { title: 'Đánh giá', icon: <IconStar color="#F59E0B" />, path: '/rating', bgColor: '#FFF8E6', borderColor: '#FFE9B3' },
-    { title: 'iHanoi', icon: <IconBuilding color="#10B981" />, path: '/ihanoi', bgColor: '#ECFDF5', borderColor: '#C6F7E2' },
-    { title: 'VNeID', icon: <IconShield color="#06B6D4" />, path: '/vneid', bgColor: '#ECFEFF', borderColor: '#C4F1F9' },
+  const publicServices = [
+    {
+      title: 'Thủ tục hành chính',
+      description: 'Cấp giấy tờ, chứng thực',
+      icon: 'file' as IconName,
+      tone: 'indigo',
+      path: '/dvc',
+    },
+    {
+      title: 'An sinh xã hội',
+      description: 'Hỗ trợ, bảo trợ xã hội',
+      icon: 'heart' as IconName,
+      tone: 'coral',
+      path: '/social-security',
+    },
+    {
+      title: 'Y tế',
+      description: 'Khám bệnh, tiêm chủng',
+      icon: 'medical' as IconName,
+      tone: 'green',
+      path: '/health',
+    },
+    {
+      title: 'Giáo dục',
+      description: 'Trường học, khuyến học',
+      icon: 'education' as IconName,
+      tone: 'amber',
+      path: '/education',
+    },
   ];
 
-  const otherServices = [
-    { title: 'Tin tức', icon: '📰', path: '/news', bgColor: '#E3F2FD' },
-    { title: 'Trang TTĐT', icon: '🌐', path: '/ttdt', bgColor: '#F3E5F5' },
-    { title: 'Sự kiện', icon: '🎉', path: '/events', bgColor: '#FFF3E0' },
-    { title: 'Di tích', icon: '🏛️', path: '/heritage', bgColor: '#E8F5E9' },
-    { title: 'Kiến thức CĐS', icon: '💡', path: '/quiz', bgColor: '#FFFDE7', isNew: true },
-    { title: 'Giáo dục', icon: '🎓', path: '/education', bgColor: '#FCE4EC' },
-    { title: 'Quy hoạch', icon: '🗺️', path: '/planning', bgColor: '#E0F2F1' },
+  const exploreItems = [
+    { title: 'Trang TTĐT', icon: 'globe' as IconName, tone: 'violet', path: '/ttdt' },
+    { title: 'Sự kiện', icon: 'spark' as IconName, tone: 'orange', path: '/events' },
+    { title: 'Di tích', icon: 'landmark' as IconName, tone: 'emerald', path: '/heritage' },
+    { title: 'Kiến thức CDS', icon: 'bulb' as IconName, tone: 'yellow', path: '/quiz', isNew: true },
+    { title: 'Giáo dục', icon: 'education' as IconName, tone: 'pink', path: '/education' },
+    { title: 'Quy hoạch', icon: 'map' as IconName, tone: 'teal', path: '/planning' },
   ];
 
   return (
-    <Page className="page" style={{ paddingBottom: '80px', backgroundColor: 'var(--surface)' }}>
-      {/* ===== HERO BANNER ===== */}
-      <Box style={{ position: 'relative', height: '320px' }}>
-        {banners.length > 0 && (
-          <Swiper autoplay duration={4000} loop style={{ height: '320px', width: '100%', borderRadius: '0px', overflow: 'hidden' }}>
-            {banners.map((banner) => (
-              <Swiper.Slide key={banner.id}>
-                <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-                  <img src={banner.img} alt="Banner" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  <div style={{
-                    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-                    background: 'linear-gradient(180deg, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.05) 40%, rgba(0,0,0,0.45) 100%)'
-                  }} />
-                </div>
-              </Swiper.Slide>
-            ))}
-          </Swiper>
-        )}
+    <Page className="home-page">
+      <header className="home-topbar">
+        <div className="home-brand">
+          <span className="home-brand-logo">
+            <img src={wardLogo} alt="Logo Phường Tùng Thiện" />
+          </span>
+          <Text className="home-brand-title">Phường Tùng Thiện</Text>
+        </div>
+      </header>
 
-        {/* Identity & Greeting Overlay */}
-        <div style={{
-          position: 'absolute', top: 0, left: 0, right: 0,
-          padding: '16px', paddingTop: 'calc(env(safe-area-inset-top, 0) + 16px)',
-          zIndex: 10
-        }}>
-          {/* Logo + Title */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <div style={{
-                width: '44px', height: '44px', backgroundColor: 'rgba(255,255,255,0.95)',
-                borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                overflow: 'hidden', boxShadow: '0 2px 12px rgba(0,0,0,0.15)'
-              }}>
-                <img src={logo} alt="logo" style={{ width: '80%', height: '80%', objectFit: 'contain' }} />
-              </div>
-              <Text style={{ color: '#FFF', fontWeight: 800, fontSize: '18px', textShadow: '0 2px 8px rgba(0,0,0,0.3)', letterSpacing: '-0.02em' }}>
-                Phường Tùng Thiện
-              </Text>
-            </div>
-            <div className="glass-dark active-scale" style={{
-              width: '40px', height: '40px', borderRadius: '50%',
-              display: 'flex', alignItems: 'center', justifyContent: 'center'
-            }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
-                <circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/>
-              </svg>
-            </div>
-          </div>
+      <section className="home-hero" aria-labelledby="home-title">
+        <div className="home-hero-grid" />
+        <Text className="home-hero-kicker">Zalo Mini App</Text>
+        <Text id="home-title" className="home-hero-title">
+          Phường Tùng Thiện
+        </Text>
+      </section>
 
-          {/* Greeting Card — Glassmorphism */}
-          <div className="glass animate-fade-in-up" style={{
-            marginTop: '28px', padding: '18px 20px', borderRadius: '20px',
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.12)'
-          }}>
-            <div>
-              <Text style={{ color: 'var(--text-muted)', fontSize: '13px', marginBottom: '2px', fontWeight: 500 }}>
-                {getGreeting()} 👋
-              </Text>
-              <Text style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: '20px', letterSpacing: '-0.02em' }}>
-                {userInfo?.name || 'Khách truy cập'}
-              </Text>
-            </div>
-            <div style={{ position: 'relative' }}>
+      <main className="home-content">
+        <section className="citizen-card" aria-label="Định danh công dân">
+          <div className="citizen-profile">
+            <div className="citizen-identity">
               <img
-                src={userInfo?.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100'}
-                alt="avatar"
-                style={{ width: '52px', height: '52px', borderRadius: '50%', objectFit: 'cover', border: '3px solid #FFF', boxShadow: '0 2px 12px rgba(0,0,0,0.15)' }}
+                className="citizen-avatar"
+                src={userInfo?.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&h=120&fit=crop'}
+                alt="Ảnh đại diện"
               />
-              <div style={{
-                position: 'absolute', bottom: 0, right: 0,
-                width: '14px', height: '14px', backgroundColor: '#10B981',
-                borderRadius: '50%', border: '2.5px solid #FFF'
-              }} />
+              <div className="citizen-badge">
+                <Icon name="badge" size={14} />
+                <span>Công dân số</span>
+              </div>
+            </div>
+            <div className="citizen-copy">
+              <Text className="citizen-greeting">{getGreeting()}</Text>
+              <div className={`citizen-name${shouldAnimateName ? ' is-marquee' : ''}`} aria-label={citizenName}>
+                <span className="citizen-name-track">
+                  <span>{citizenName}</span>
+                  {shouldAnimateName && <span aria-hidden="true">{citizenName}</span>}
+                </span>
+              </div>
             </div>
           </div>
-        </div>
-      </Box>
+        </section>
 
-      {/* ===== MAIN CONTENT ===== */}
-      <Box style={{
-        marginTop: '-28px',
-        backgroundColor: 'var(--surface)',
-        borderTopLeftRadius: '28px',
-        borderTopRightRadius: '28px',
-        position: 'relative',
-        zIndex: 20,
-      }}>
-        {/* Quick Actions Strip */}
-        <div className="animate-fade-in-up delay-50" style={{
-          display: 'flex', gap: '12px',
-          padding: '20px 16px 8px 16px'
-        }}>
-          {quickActions.map((action, i) => (
-            <div
+        <section className="admin-banner" aria-label="Hành chính hiện đại">
+          <div className="admin-banner-art" aria-hidden="true">
+            <span />
+            <span />
+            <span />
+            <span />
+          </div>
+          <Text className="admin-banner-title">Hành chính hiện đại - Phục vụ người dân</Text>
+          <Text className="admin-banner-copy">Minh bạch - Nhanh chóng - Tiện lợi</Text>
+          <button className="admin-banner-button" type="button" onClick={() => navigateFromHome('/dvc')}>
+            <span>Tìm hiểu thêm</span>
+            <Icon name="arrow" size={18} />
+          </button>
+        </section>
+
+        <section className="quick-actions" aria-label="Chức năng nhanh">
+          {quickActions.map((action) => (
+            <button
               key={action.title}
+              className={`quick-action-card quick-action-card-${action.tone}`}
+              type="button"
               onClick={action.onClick}
-              className="active-scale"
-              style={{
-                flex: 1,
-                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px',
-                padding: '14px 8px',
-                background: action.gradient,
-                borderRadius: 'var(--radius-lg)',
-                boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
-                cursor: 'pointer'
-              }}
             >
-              <div style={{ width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                {action.icon}
-              </div>
-              <Text style={{ color: '#fff', fontSize: '12px', fontWeight: 700, textAlign: 'center' }}>
-                {action.title}
-              </Text>
-            </div>
+              <span className="quick-action-icon">
+                <Icon name={action.icon} size={20} />
+              </span>
+              <span className="quick-action-title">{action.title}</span>
+              <span className="quick-action-subtitle">{action.subtitle}</span>
+            </button>
           ))}
-        </div>
+        </section>
 
-        {/* Divider */}
-        <div style={{ padding: '12px 16px 0 16px' }}>
-          <div className="divider-gradient" />
-        </div>
-
-        {/* Main Services Grid */}
-        <Box className="animate-fade-in-up delay-100" style={{ padding: '20px 16px 12px 16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-            <Text className="section-title">Dịch vụ chính</Text>
-            <Text style={{ color: 'var(--primary)', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>Xem tất cả</Text>
+        <section className="home-section">
+          <div className="home-section-heading">
+            <Text className="home-section-title">Dịch vụ công</Text>
+            <button type="button" className="home-section-link" onClick={() => navigateFromHome('/dvc')}>
+              Tất cả
+            </button>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
-            {mainServices.map((service, i) => (
-              <div
+          <div className="public-service-grid">
+            {publicServices.map((service) => (
+              <button
                 key={service.title}
-                onClick={() => navigate(service.path, { state: { title: service.title } })}
-                className={`card active-scale animate-fade-in-up delay-${(i + 1) * 50}`}
-                style={{
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                  padding: '16px 8px',
-                  border: `1px solid ${service.borderColor}`,
-                }}
+                type="button"
+                className="public-service-card"
+                onClick={() => navigateFromHome(service.path, { title: service.title })}
               >
-                <div className="service-icon-box" style={{
-                  backgroundColor: service.bgColor,
-                  marginBottom: '10px'
-                }}>
-                  {service.icon}
-                </div>
-                <Text style={{ textAlign: 'center', fontWeight: 600, fontSize: '12px', color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
-                  {service.title}
-                </Text>
-              </div>
+                <span className={`service-icon service-icon-${service.tone}`}>
+                  <Icon name={service.icon} size={19} />
+                </span>
+                <span className="service-title">{service.title}</span>
+                <span className="service-description">{service.description}</span>
+              </button>
             ))}
           </div>
-        </Box>
+        </section>
 
-        {/* Divider */}
-        <div style={{ padding: '0 16px' }}>
-          <div className="divider-gradient" />
-        </div>
-
-        {/* Other Services */}
-        <Box className="animate-fade-in-up delay-200" style={{ padding: '20px 16px 32px 16px' }}>
-          <Text className="section-title" style={{ marginBottom: '16px' }}>Khám phá thêm</Text>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
-            {otherServices.map((service, i) => (
-              <div
-                key={service.title}
-                onClick={() => navigate(service.path, { state: { title: service.title } })}
-                className="active-scale"
-                style={{
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                  padding: '12px 4px',
-                  cursor: 'pointer',
-                  position: 'relative',
-                }}
+        <section className="home-section">
+          <Text className="home-section-title">Khám phá thêm</Text>
+          <div className="explore-grid">
+            {exploreItems.map((item) => (
+              <button
+                key={item.title}
+                type="button"
+                className="explore-item"
+                onClick={() => navigateFromHome(item.path, { title: item.title })}
               >
-                <div style={{
-                  width: '48px', height: '48px',
-                  backgroundColor: service.bgColor,
-                  borderRadius: 'var(--radius-md)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  marginBottom: '8px',
-                  fontSize: '22px',
-                  transition: 'transform 0.2s ease',
-                }}>
-                  {service.icon}
-                </div>
-                <Text style={{ textAlign: 'center', fontWeight: 600, fontSize: '11px', color: 'var(--text-secondary)', lineHeight: '1.3' }}>
-                  {service.title}
-                </Text>
-                {service.isNew && (
-                  <div style={{
-                    position: 'absolute', top: '4px', right: '4px',
-                    backgroundColor: '#EF4444', color: '#fff',
-                    fontSize: '9px', fontWeight: 700,
-                    padding: '2px 5px', borderRadius: '6px',
-                    lineHeight: '1.2'
-                  }}>
-                    MỚI
-                  </div>
-                )}
-              </div>
+                <span className={`explore-icon explore-icon-${item.tone}`}>
+                  <Icon name={item.icon} size={20} />
+                </span>
+                <span className="explore-title">{item.title}</span>
+                {item.isNew && <span className="explore-new">Mới</span>}
+              </button>
             ))}
           </div>
-        </Box>
-      </Box>
+        </section>
+
+        <footer className="security-footer">
+          <Icon name="lock" size={17} />
+          <Text>Dữ liệu được bảo vệ an toàn</Text>
+          <Text>NỀN TẢNG PHỤC VỤ CÔNG DÂN SỐ</Text>
+        </footer>
+      </main>
     </Page>
   );
 };

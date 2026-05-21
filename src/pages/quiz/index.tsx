@@ -1,143 +1,192 @@
-import React from 'react';
-import { Page, Box, Text, Button, useNavigate } from 'zmp-ui';
+import React, { useEffect, useState } from 'react';
+import { Page, Box, Text, useNavigate } from 'zmp-ui';
 import PageHeader from '@/components/PageHeader';
-import { useQuizStore } from '@/store/quizStore';
+import { QuizTopic, useQuizStore } from '@/store/quizStore';
 
 const QuizIndexPage: React.FC = () => {
   const navigate = useNavigate();
-  const quizzes = useQuizStore(state => state.quizzes);
-  const getAttempt = useQuizStore(state => state.getAttempt);
+  const [selectedTopic, setSelectedTopic] = useState<QuizTopic | null>(null);
+  const { topics, sets, isLoading, error, fetchTopics, fetchSetsByTopic } = useQuizStore();
+
+  useEffect(() => {
+    fetchTopics();
+  }, [fetchTopics]);
+
+  const handleSelectTopic = async (topic: QuizTopic) => {
+    setSelectedTopic(topic);
+    await fetchSetsByTopic(topic.id);
+  };
 
   return (
     <Page className="page" style={{ backgroundColor: 'var(--surface)', height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <PageHeader title="Khảo sát Kiến thức" />
-      
-      {/* Hero Banner */}
+      <PageHeader title={selectedTopic ? selectedTopic.title : 'Kiến thức CĐS'} />
+
       <div className="animate-fade-in-up" style={{
-        margin: '0',
         padding: '24px 20px',
         background: 'var(--gradient-hero)',
-        position: 'relative',
-        overflow: 'hidden'
+        color: '#fff'
       }}>
-        {/* Pattern overlay */}
-        <div style={{
-          position: 'absolute', top: 0, right: 0, bottom: 0,
-          width: '120px', opacity: 0.1,
-          background: 'radial-gradient(circle at 80% 50%, white 1px, transparent 1px)',
-          backgroundSize: '16px 16px'
-        }} />
-        <div style={{ position: 'relative', zIndex: 1 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-            <Text style={{ fontSize: '24px' }}>🧠</Text>
-            <Text style={{ color: '#fff', fontSize: '18px', fontWeight: 800, letterSpacing: '-0.02em' }}>
-              Đánh giá Năng lực Số
-            </Text>
-          </div>
-          <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: '13px', lineHeight: '1.5', maxWidth: '280px' }}>
-            Tham gia trắc nghiệm để củng cố kiến thức chuyển đổi số và đua top bảng xếp hạng!
-          </Text>
-        </div>
+        <Text style={{ color: '#fff', fontSize: '18px', fontWeight: 800 }}>
+          Đánh giá năng lực số
+        </Text>
+        <Text style={{ color: 'rgba(255,255,255,0.86)', fontSize: '13px', lineHeight: 1.5, marginTop: '8px' }}>
+          Chọn chủ đề, tham gia trắc nghiệm và theo dõi xếp hạng theo từng bộ câu hỏi.
+        </Text>
       </div>
 
       <Box style={{ flex: 1, overflow: 'auto', padding: '16px', paddingBottom: '160px' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          {quizzes.map((quiz, idx) => {
-            const attempt = getAttempt(quiz.id);
-            const isClosed = quiz.status === 'closed';
-            
-            const borderColor = attempt ? 'var(--success)' : isClosed ? 'var(--text-muted)' : 'var(--primary)';
-            const statusGradient = attempt
-              ? 'var(--gradient-green)'
-              : isClosed
-                ? 'linear-gradient(135deg, #9CA3AF, #6B7280)'
-                : 'var(--gradient-hero)';
+        {selectedTopic && (
+          <button
+            onClick={() => setSelectedTopic(null)}
+            style={{
+              border: 'none',
+              background: 'transparent',
+              color: 'var(--primary)',
+              fontWeight: 700,
+              padding: '0 0 12px'
+            }}
+          >
+            ← Tất cả chủ đề
+          </button>
+        )}
 
-            return (
-              <div
-                key={quiz.id}
-                className={`card-elevated animate-fade-in-up delay-${Math.min((idx + 1) * 100, 400)}`}
+        {isLoading && (
+          <Box style={{ display: 'flex', justifyContent: 'center', padding: '32px' }}>
+            <Text>Đang tải...</Text>
+          </Box>
+        )}
+
+        {error && (
+          <div className="card-elevated" style={{ padding: '16px', color: 'var(--danger)' }}>
+            {error}
+          </div>
+        )}
+
+        {!isLoading && !selectedTopic && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {topics.map((topic) => (
+              <button
+                key={topic.id}
+                className="card-elevated"
+                onClick={() => handleSelectTopic(topic)}
                 style={{
+                  border: 'none',
+                  textAlign: 'left',
                   padding: '16px',
                   borderRadius: 'var(--radius-lg)',
-                  borderLeft: `4px solid ${borderColor}`,
+                  background: '#fff'
                 }}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-                  <Text style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)', flex: 1, letterSpacing: '-0.01em' }}>
+                <Text style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-primary)' }}>{topic.title}</Text>
+                {topic.description && (
+                  <Text style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '6px', lineHeight: 1.45 }}>
+                    {topic.description}
+                  </Text>
+                )}
+                <Text style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '10px' }}>
+                  {topic._count?.sets || 0} bộ câu hỏi
+                </Text>
+              </button>
+            ))}
+            {topics.length === 0 && !error && (
+              <Text style={{ color: 'var(--text-muted)', textAlign: 'center', marginTop: '24px' }}>
+                Chưa có chủ đề nào được xuất bản.
+              </Text>
+            )}
+          </div>
+        )}
+
+        {!isLoading && selectedTopic && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            {sets.map((quiz) => {
+              const attempt = quiz.attempt;
+              const isClosed = quiz.status === 'CLOSED';
+
+              return (
+                <div
+                  key={quiz.id}
+                  className="card-elevated"
+                  style={{
+                    padding: '16px',
+                    borderRadius: 'var(--radius-lg)',
+                    borderLeft: `4px solid ${attempt ? 'var(--success)' : isClosed ? 'var(--text-muted)' : 'var(--primary)'}`
+                  }}
+                >
+                  <Text style={{ fontSize: '15px', fontWeight: 800, color: 'var(--text-primary)' }}>
                     {quiz.title}
                   </Text>
-                  {attempt && (
-                    <div className="badge badge-success" style={{ marginLeft: '8px' }}>
-                      🏆 {attempt.score} điểm
-                    </div>
+                  {quiz.description && (
+                    <Text style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '8px', lineHeight: 1.5 }}>
+                      {quiz.description}
+                    </Text>
                   )}
-                  {isClosed && !attempt && (
-                    <div className="badge" style={{ background: 'hsl(220,10%,92%)', color: 'var(--text-muted)', marginLeft: '8px' }}>
-                      Đã đóng
-                    </div>
-                  )}
-                </div>
-                
-                <Text style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '14px', lineHeight: '1.5' }}>
-                  {quiz.description}
-                </Text>
 
-                {/* Meta info */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '14px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-                    </svg>
-                    <Text style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 500 }}>{quiz.timeLimit / 60} phút</Text>
+                  <div style={{ display: 'flex', gap: '16px', margin: '14px 0' }}>
+                    <Text style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>
+                      {Math.round(quiz.timeLimit / 60)} phút
+                    </Text>
+                    <Text style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>
+                      {quiz.questionCount || 0} câu
+                    </Text>
+                    {attempt && (
+                      <Text style={{ fontSize: '12px', color: 'var(--success)', fontWeight: 700 }}>
+                        {attempt.score}/{attempt.maxScore} điểm
+                      </Text>
+                    )}
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
-                    </svg>
-                    <Text style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 500 }}>{quiz.questions.length} câu</Text>
-                  </div>
-                </div>
 
-                {isClosed ? (
-                  <button disabled style={{
-                    width: '100%', padding: '11px',
-                    background: 'hsl(220,10%,94%)', color: 'var(--text-muted)',
-                    border: 'none', borderRadius: 'var(--radius-md)',
-                    fontWeight: 600, fontSize: '14px'
-                  }}>
-                    Đã đóng
-                  </button>
-                ) : attempt ? (
-                  <button
-                    onClick={() => navigate('/quiz-result', { state: { quizId: quiz.id } })}
-                    style={{
-                      width: '100%', padding: '11px',
-                      background: 'var(--success-light)', color: 'var(--success)',
-                      border: `1.5px solid var(--success)`,
+                  {attempt && attempt.status !== 'IN_PROGRESS' ? (
+                    <button
+                      onClick={() => navigate('/quiz-result', { state: { setId: quiz.id } })}
+                      style={{
+                        width: '100%',
+                        padding: '11px',
+                        background: 'var(--success-light)',
+                        color: 'var(--success)',
+                        border: '1.5px solid var(--success)',
+                        borderRadius: 'var(--radius-md)',
+                        fontWeight: 700
+                      }}
+                    >
+                      Xem kết quả & xếp hạng
+                    </button>
+                  ) : isClosed ? (
+                    <button disabled style={{
+                      width: '100%',
+                      padding: '11px',
+                      background: 'hsl(220,10%,94%)',
+                      color: 'var(--text-muted)',
+                      border: 'none',
                       borderRadius: 'var(--radius-md)',
-                      fontWeight: 600, fontSize: '14px', cursor: 'pointer'
-                    }}
-                  >
-                    Xem kết quả & Xếp hạng
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => navigate('/quiz-take', { state: { quizId: quiz.id } })}
-                    className="btn-gradient ripple-container"
-                    style={{
-                      width: '100%', padding: '11px',
-                      border: 'none', borderRadius: 'var(--radius-md)',
-                      fontWeight: 600, fontSize: '14px', cursor: 'pointer'
-                    }}
-                  >
-                    🚀 Bắt đầu làm bài
-                  </button>
-                )}
-              </div>
-            );
-          })}
-        </div>
+                      fontWeight: 700
+                    }}>
+                      Đã đóng
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => navigate('/quiz-take', { state: { setId: quiz.id } })}
+                      className="btn-gradient ripple-container"
+                      style={{
+                        width: '100%',
+                        padding: '11px',
+                        border: 'none',
+                        borderRadius: 'var(--radius-md)',
+                        fontWeight: 700
+                      }}
+                    >
+                      Bắt đầu làm bài
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+            {sets.length === 0 && (
+              <Text style={{ color: 'var(--text-muted)', textAlign: 'center', marginTop: '24px' }}>
+                Chủ đề này chưa có bộ câu hỏi đang mở.
+              </Text>
+            )}
+          </div>
+        )}
       </Box>
     </Page>
   );

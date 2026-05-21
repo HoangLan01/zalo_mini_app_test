@@ -15,7 +15,7 @@ export const startReminderJob = () => {
       const nowMinus1h = new Date(now.getTime() - 60 * 60 * 1000);
 
       // 1. Nhắc lịch 24h
-      const bookings24h = await prisma.bookings.findMany({
+      const bookings24h = await prisma.booking.findMany({
         where: {
           status: 'CONFIRMED',
           reminder24hSent: false,
@@ -24,18 +24,18 @@ export const startReminderJob = () => {
             lt: nowPlus25h
           }
         },
-        include: { users: true }
+        include: { user: true }
       });
 
       for (const booking of bookings24h) {
-        if (booking.users.phoneToken) {
-          await sendBookingReminder(booking.users.phoneToken, booking, '24h');
-          await prisma.bookings.update({ where: { id: booking.id }, data: { reminder24hSent: true } });
+        if (booking.user.phoneToken) {
+          await sendBookingReminder(booking.user.phoneToken, booking, '24h');
+          await prisma.booking.update({ where: { id: booking.id }, data: { reminder24hSent: true } });
         }
       }
 
       // 2. Nhắc lịch 1h
-      const bookings1h = await prisma.bookings.findMany({
+      const bookings1h = await prisma.booking.findMany({
         where: {
           status: 'CONFIRMED',
           reminder1hSent: false,
@@ -44,18 +44,18 @@ export const startReminderJob = () => {
             lt: nowPlus90m
           }
         },
-        include: { users: true }
+        include: { user: true }
       });
 
       for (const booking of bookings1h) {
-        if (booking.users.phoneToken) {
-          await sendBookingReminder(booking.users.phoneToken, booking, '1h');
-          await prisma.bookings.update({ where: { id: booking.id }, data: { reminder1hSent: true } });
+        if (booking.user.phoneToken) {
+          await sendBookingReminder(booking.user.phoneToken, booking, '1h');
+          await prisma.booking.update({ where: { id: booking.id }, data: { reminder1hSent: true } });
         }
       }
 
       // 3. Auto-complete
-      await prisma.bookings.updateMany({
+      await prisma.booking.updateMany({
         where: {
           status: 'CONFIRMED',
           confirmedDate: {

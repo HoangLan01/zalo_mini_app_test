@@ -8,9 +8,6 @@ async function check() {
     if (token) {
        console.log('Token expires at:', token.expiresAt);
     }
-    
-    const articleCount = await prisma.article.count();
-    console.log('Article count in DB:', articleCount);
   } catch (err: any) {
     console.error('Error checking DB:', err.message);
   } finally {

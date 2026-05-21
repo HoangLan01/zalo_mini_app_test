@@ -359,30 +359,6 @@ CREATE OR REPLACE TRIGGER "oa_tokens_updatedAt_trigger"
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
--- -----------------------------------------------------------------------------
--- BẢNG 6: articles – Bài viết đồng bộ từ Zalo OA
--- -----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS "articles" (
-    "id"            TEXT         NOT NULL, -- Dùng chính ID bài viết của Zalo
-    "title"         TEXT         NOT NULL,
-    "description"   TEXT,
-    "content"       TEXT,
-    "thumbnailUrl"  TEXT,
-    "category"      VARCHAR(50)  NOT NULL DEFAULT 'Tin tức',
-    "publishedAt"   TIMESTAMPTZ  NOT NULL,
-    "author"        VARCHAR(100) DEFAULT 'Admin',
-    "createdAt"     TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-    "updatedAt"     TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-
-    CONSTRAINT "articles_pkey" PRIMARY KEY ("id")
-);
-COMMENT ON TABLE "articles" IS 'Lưu trữ các bài viết được đồng bộ tự động từ Zalo OA';
-
--- Trigger cập nhật updatedAt cho articles
-CREATE OR REPLACE TRIGGER "articles_updatedAt_trigger"
-    BEFORE UPDATE ON "articles"
-    FOR EACH ROW
-    EXECUTE FUNCTION update_updated_at_column();
 -- =============================================================================
 -- BƯỚC 4: TẠO INDEX
 -- =============================================================================
@@ -456,11 +432,6 @@ CREATE INDEX IF NOT EXISTS "ratings_avgScore_idx"
 CREATE INDEX IF NOT EXISTS "ratings_alert_idx"
     ON "ratings" ("alertSent", "averageScore")
     WHERE "alertSent" = FALSE;
-
--- Index cho articles
-CREATE INDEX IF NOT EXISTS "articles_publishedAt_idx"
-    ON "articles" ("publishedAt" DESC);
-
 
 -- =============================================================================
 -- BƯỚC 5: TẠO TRIGGER TỰ ĐỘNG CẬP NHẬT updatedAt
@@ -735,9 +706,9 @@ DECLARE
     v_count INT;
 BEGIN
     -- 1. Kiểm tra Bảng
-    FOREACH v_table IN ARRAY ARRAY['users', 'feedbacks', 'bookings', 'ratings', 'oa_tokens', 'articles']
+    FOREACH v_table IN ARRAY ARRAY['users', 'feedbacks', 'bookings', 'ratings', 'oa_tokens']
     LOOP
-        SELECT COUNT(*) INTO v_count FROM information_schema.tables 
+        SELECT COUNT(*) INTO v_count FROM information_schema.tables
         WHERE table_schema = 'public' AND table_name = v_table;
         IF v_count = 0 THEN v_missing_tables := v_missing_tables || v_table; END IF;
     END LOOP;
@@ -754,10 +725,10 @@ BEGIN
     FOREACH v_trigger IN ARRAY ARRAY[
         'users_updatedAt_trigger', 'feedbacks_updatedAt_trigger', 'bookings_updatedAt_trigger',
         'bookings_future_date_trigger', 'bookings_cancellable_trigger', 'ratings_calc_avg_trigger',
-        'oa_tokens_updatedAt_trigger', 'articles_updatedAt_trigger'
+        'oa_tokens_updatedAt_trigger'
     ]
     LOOP
-        SELECT COUNT(*) INTO v_count FROM information_schema.triggers 
+        SELECT COUNT(*) INTO v_count FROM information_schema.triggers
         WHERE trigger_schema = 'public' AND trigger_name = v_trigger;
         IF v_count = 0 THEN v_missing_triggers := v_missing_triggers || v_trigger; END IF;
     END LOOP;
@@ -766,9 +737,9 @@ BEGIN
     RAISE NOTICE '=================================================';
     RAISE NOTICE 'KẾT QUẢ KHỞI TẠO DATABASE tungtthien_db';
     RAISE NOTICE '=================================================';
-    
+
     IF array_length(v_missing_tables, 1) IS NULL THEN
-        RAISE NOTICE '✅ Tất cả bảng đã tạo đủ (6/6)';
+        RAISE NOTICE '✅ Tất cả bảng đã tạo đủ (5/5)';
     ELSE
         RAISE WARNING '❌ Thiếu bảng: %', array_to_string(v_missing_tables, ', ');
     END IF;
@@ -787,11 +758,11 @@ BEGIN
 
     RAISE NOTICE '=================================================';
 
-    IF array_length(v_missing_tables, 1) IS NULL AND 
-       array_length(v_missing_enums, 1) IS NULL AND 
+    IF array_length(v_missing_tables, 1) IS NULL AND
+       array_length(v_missing_enums, 1) IS NULL AND
        array_length(v_missing_triggers, 1) IS NULL THEN
         RAISE NOTICE '🎉 Khởi tạo thành công! Database sẵn sàng sử dụng.';
     ELSE
         RAISE EXCEPTION 'Vui lòng kiểm tra các lỗi trên và chạy lại script.';
     END IF;
-END $$;
+END $$;

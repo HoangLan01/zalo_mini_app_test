@@ -11,8 +11,6 @@
   "listAsyncJS": [],
   "pages": [
     "pages/index/index",
-    "pages/news/index",
-    "pages/news/detail",
     "pages/services/index",
     "pages/feedback/index",
     "pages/feedback/create",

@@ -52,7 +52,6 @@ backend/
 │   │   ├── feedback.routes.ts
 │   │   ├── booking.routes.ts
 │   │   ├── rating.routes.ts
-│   │   ├── news.routes.ts
 │   │   ├── events.routes.ts
 │   │   ├── heritage.routes.ts
 │   │   ├── upload.routes.ts
@@ -63,7 +62,6 @@ backend/
 │   │   ├── feedback.controller.ts
 │   │   ├── booking.controller.ts
 │   │   ├── rating.controller.ts
-│   │   ├── news.controller.ts
 │   │   ├── events.controller.ts
 │   │   ├── heritage.controller.ts
 │   │   ├── upload.controller.ts
@@ -74,7 +72,6 @@ backend/
 │   │   ├── feedback.service.ts
 │   │   ├── booking.service.ts
 │   │   ├── rating.service.ts
-│   │   ├── news.service.ts      # Đọc từ Google Sheets
 │   │   ├── events.service.ts    # Đọc từ Google Sheets
 │   │   ├── heritage.service.ts  # Đọc từ Google Sheets
 │   │   ├── zaloOA.service.ts    # Gửi tin nhắn vào OA Manager
@@ -167,7 +164,6 @@ CLOUDINARY_API_SECRET=<api_secret>
 # Google Sheets (Service Account)
 GOOGLE_SERVICE_ACCOUNT_EMAIL=<service_account_email>
 GOOGLE_PRIVATE_KEY=<private_key_multiline>
-GOOGLE_SHEETS_NEWS_ID=<spreadsheet_id>
 GOOGLE_SHEETS_EVENTS_ID=<spreadsheet_id>
 GOOGLE_SHEETS_HERITAGE_ID=<spreadsheet_id>
 
@@ -315,7 +311,6 @@ export interface ApiError {
 //    /api/feedbacks        → feedback.routes.ts (có auth middleware)
 //    /api/bookings         → booking.routes.ts  (có auth middleware)
 //    /api/ratings          → rating.routes.ts   (có auth middleware)
-//    /api/news             → news.routes.ts     (KHÔNG có auth middleware – public)
 //    /api/events           → events.routes.ts   (KHÔNG có auth middleware – public)
 //    /api/heritage         → heritage.routes.ts (KHÔNG có auth middleware – public)
 //    /api/upload           → upload.routes.ts   (có auth middleware)
@@ -954,13 +949,12 @@ GET /api/ratings/summary  (KHÔNG cần auth)
 
 ---
 
-## PHẦN 8 – NỘI DUNG TỪ GOOGLE SHEETS (NEWS, EVENTS, HERITAGE)
+## PHẦN 8 – NỘI DUNG TỪ GOOGLE SHEETS (EVENTS, HERITAGE)
 
 ### 8.1. Chiến lược Google Sheets làm CMS
 
 ```
-Cán bộ phường cập nhật nội dung trực tiếp vào 3 Google Sheets riêng biệt:
-- Sheet Tin tức (GOOGLE_SHEETS_NEWS_ID)
+Cán bộ phường cập nhật nội dung trực tiếp vào 2 Google Sheets riêng biệt:
 - Sheet Sự kiện (GOOGLE_SHEETS_EVENTS_ID)
 - Sheet Di tích (GOOGLE_SHEETS_HERITAGE_ID)
 
@@ -969,19 +963,6 @@ KHÔNG dùng Redis. Cache bằng Map<string, { data, expiresAt }> trong module.
 ```
 
 ### 8.2. Cấu trúc Google Sheets (header hàng 1, data từ hàng 2)
-
-**Sheet Tin tức – các cột theo thứ tự:**
-```
-A: id          (chuỗi unique, VD: "news-001")
-B: title       (tiêu đề)
-C: summary     (tóm tắt 1-2 câu)
-D: content     (HTML hoặc Markdown – back-end không xử lý, trả nguyên)
-E: thumbnailUrl (URL ảnh)
-F: category    (tin-tuc | thong-bao | van-ban)
-G: featured    (TRUE/FALSE – dùng cho banner trang chủ)
-H: publishedAt (ISO datetime, VD: "2026-05-20T08:00:00.000Z")
-I: isActive    (TRUE/FALSE – FALSE thì không trả về)
-```
 
 **Sheet Sự kiện:**
 ```
@@ -1037,7 +1018,6 @@ L: isActive    (TRUE/FALSE)
 //     + Lưu vào cache với expiresAt = Date.now() + TTL * 1000
 //   - Return values (bỏ hàng đầu tiên là header)
 
-// Hàm parseNewsRow(row: string[]): NewsItem | null
 // Hàm parseEventRow(row: string[]): EventItem | null
 // Hàm parseHeritageRow(row: string[]): HeritageItem | null
 //   - Parse từng cột theo cấu trúc Sheet
@@ -1045,34 +1025,12 @@ L: isActive    (TRUE/FALSE)
 //   - Bọc trong try/catch, nếu lỗi log warning và return null
 ```
 
-### 8.4. src/services/news.service.ts
 
-```typescript
-// Hàm getAllNews(filters: { category?, featured?, page, limit }): Promise<PaginatedResult<NewsItem>>
-//   - Gọi googleSheets.service.getSheetData() để lấy toàn bộ rows
-//   - Parse từng row, lọc null
-//   - Filter theo category nếu có
-//   - Filter theo featured nếu có (featured = "TRUE")
-//   - Sort: publishedAt DESC
-//   - Phân trang thủ công (slice)
-//   - Return { data, pagination }
-
-// Hàm getNewsById(id: string): Promise<NewsItem | null>
-//   - Lấy toàn bộ, tìm theo id
-```
-
-### 8.5. Routes – News, Events, Heritage
+### 8.4. Routes – Events, Heritage
 
 ```
 Tất cả routes dưới đây là PUBLIC (không cần auth middleware).
 
---- NEWS ---
-GET /api/news
-  Query: category (optional), featured (optional: "true"/"false"), page, limit
-  Response: ApiList<NewsItem>
-
-GET /api/news/:id
-  Response: ApiSuccess<NewsItem> | 404
 
 --- EVENTS ---
 GET /api/events
@@ -1618,8 +1576,6 @@ echo "Backup completed: $BACKUP_FILE"
 ```
 PUBLIC (không cần auth):
   GET  /health
-  GET  /api/news
-  GET  /api/news/:id
   GET  /api/events
   GET  /api/events/:id
   GET  /api/heritage
@@ -1689,7 +1645,7 @@ Bước 11: Phần 6  – Rating service + route + controller
 Bước 12: Phần 11 – Webhook controller + service
          (Bước này kết nối Bước 9 + 10 thành luồng hoàn chỉnh)
 Bước 13: Phần 12 – Cron job nhắc lịch
-Bước 14: Phần 8  – Google Sheets service + News/Events/Heritage routes
+Bước 14: Phần 8  – Google Sheets service + Events/Heritage routes
 Bước 15: Phần 14 – Deploy: build, PM2, Nginx, SSL, backup script
 Bước 16: Phần 15 – Kiểm thử toàn bộ theo checklist
 ```

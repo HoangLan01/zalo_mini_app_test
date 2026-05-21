@@ -36,7 +36,6 @@ Zalo Mini App id: 'your_id'
 src/
 ├── pages/              # Mỗi màn hình là 1 file .tsx riêng
 │   ├── index/          # Trang chủ
-│   ├── news/           # Thông tin phường
 │   ├── services/       # Dịch vụ công
 │   ├── feedback/       # Phản ánh hiện trường
 │   ├── booking/        # Đặt lịch tiếp dân
@@ -62,7 +61,6 @@ src/
 │   ├── api.ts          # Base axios/fetch config
 │   ├── feedbackService.ts
 │   ├── bookingService.ts
-│   ├── newsService.ts
 │   └── ratingService.ts
 ├── types/              # TypeScript interfaces
 │   └── index.ts
@@ -167,8 +165,6 @@ Xây dựng khung ứng dụng với Bottom Navigation 4 tab và router cho toà
   },
   "pages": [
     "pages/index/index",
-    "pages/news/index",
-    "pages/news/detail",
     "pages/services/index",
     "pages/feedback/index",
     "pages/feedback/create",
@@ -211,10 +207,6 @@ Tab 1 – Trang chủ:
   - Label: "Trang chủ"
   - Route: /
 
-Tab 2 – Thông tin phường:
-  - Icon: newspaper / document
-  - Label: "Tin tức"
-  - Route: /news
 
 Tab 3 – Dịch vụ:
   - Icon: grid / apps
@@ -254,17 +246,15 @@ Props: { title?: string } – cho phép override tiêu đề tính năng cụ th
 
 ### Yêu cầu
 
-Xây dựng màn hình Home là điểm vào chính của ứng dụng. Hiển thị greeting người dùng, lưới phím tắt 12 tính năng, và banner tin tức nổi bật.
+Xây dựng màn hình Home là điểm vào chính của ứng dụng. Hiển thị greeting người dùng và lưới phím tắt các tính năng chính.
 
 ### 2.1. Bố cục tổng thể (từ trên xuống dưới)
 
 ```
 1. Header bar: logo phường + tên "UBND Phường Tùng Thiện" (không dùng nút back)
 2. Greeting card: "Xin chào, [Tên Zalo]!" + avatar tròn
-3. Banner Swiper: 3 ảnh banner tin tức mới nhất (fetch từ API /news?featured=true&limit=3)
 4. Section "Dịch vụ nổi bật": lưới 2 cột × 3 hàng = 6 ô icon (xem mục 2.2)
 5. Section "Dịch vụ khác": lưới 2 cột × 3 hàng = 6 ô icon (xem mục 2.3)
-6. Section "Tin tức mới nhất": list 3 card tin tức + nút "Xem thêm" → /news
 ```
 
 ### 2.2. Lưới "Dịch vụ nổi bật" – 6 ô
@@ -308,11 +298,6 @@ Border-radius ô: 12px, nền #FFFFFF, shadow nhẹ
 ### 2.3. Lưới "Dịch vụ khác" – 6 ô
 
 ```
-Ô 1 – Tin tức phường:
-  Icon: 📰
-  Label: "Tin tức"
-  Action: navigate('/news')
-
 Ô 2 – Sự kiện – Lễ hội:
   Icon: 🎉
   Label: "Sự kiện"
@@ -342,104 +327,11 @@ Border-radius ô: 12px, nền #FFFFFF, shadow nhẹ
   [Hiển thị ComingSoon]
 ```
 
-### 2.4. API cần gọi
-
-```typescript
-// Lấy banner và tin nổi bật
-GET /api/news?featured=true&limit=3
-Response: { data: NewsItem[] }
-
-// Lấy tin tức mới nhất
-GET /api/news?limit=3&sort=createdAt:desc
-Response: { data: NewsItem[] }
-
-interface NewsItem {
-  id: string;
-  title: string;
-  summary: string;
-  thumbnailUrl: string;
-  category: string;
-  publishedAt: string; // ISO date string
-  slug: string;
-}
-```
-
-### 2.5. Trạng thái xử lý
+### 2.4. Trạng thái xử lý
 
 ```
 - Khi đang fetch: hiển thị Skeleton loader (dùng Skeleton từ zmp-ui nếu có, hoặc tự tạo div với animation pulse)
-- Khi lỗi: hiển thị text "Không thể tải tin tức. Kéo xuống để thử lại."
 - Pull-to-refresh: wrap content bằng ScrollView có onRefresh prop
-```
-
----
-
-## PHẦN 3 – TRANG THÔNG TIN PHƯỜNG (Tin tức)
-
-### Yêu cầu
-
-Màn hình danh sách tin tức và thông báo của UBND phường. Dữ liệu lấy từ API back-end (back-end đọc từ Google Sheets CMS).
-
-### 3.1. pages/news/index.tsx – Danh sách tin tức
-
-```
-Header: "Tin tức – Thông báo" với nút back
-
-Tab phân loại (dùng Tabs từ zmp-ui):
-- Tab "Tất cả"
-- Tab "Tin tức"
-- Tab "Thông báo"
-- Tab "Văn bản"
-
-Mỗi item trong list gồm:
-- Thumbnail (80×80px, object-fit: cover, border-radius: 8px)
-- Tiêu đề (14px, font-weight: 600, tối đa 2 dòng, overflow: ellipsis)
-- Ngày đăng (12px, màu #888888, format: "DD/MM/YYYY")
-- Category badge (tag nhỏ màu nền #E8F0FE, text màu #0068FF)
-
-Phân trang: Load more khi scroll đến cuối (không dùng pagination số)
-Mỗi page: 10 items
-
-Khi nhấn item: navigate('/news/detail', truyền state { id: item.id })
-```
-
-### 3.2. pages/news/detail.tsx – Chi tiết tin tức
-
-```
-Header: tiêu đề rút gọn + nút back
-
-Nội dung:
-- Thumbnail đầy đủ chiều rộng (aspect ratio 16:9)
-- Tiêu đề (18px, font-weight: 700)
-- Meta: ngày đăng + category (12px, màu #888888)
-- Divider
-- Nội dung HTML (render bằng dangerouslySetInnerHTML, KHÔNG nhúng thêm CSS ngoài)
-- Nút "Chia sẻ" ở cuối trang (dùng shareAppMessage từ zmp-sdk)
-```
-
-### 3.3. API cần gọi
-
-```typescript
-// Danh sách tin tức
-GET /api/news?category=<all|tin-tuc|thong-bao|van-ban>&page=1&limit=10
-Response: {
-  data: NewsItem[];
-  pagination: { page: number; totalPages: number; total: number }
-}
-
-// Chi tiết tin tức
-GET /api/news/:id
-Response: {
-  data: {
-    id: string;
-    title: string;
-    content: string; // HTML string
-    thumbnailUrl: string;
-    category: string;
-    publishedAt: string;
-    author?: string;
-  }
-}
 ```
 
 ---
@@ -1314,7 +1206,6 @@ Bước 3: Phần 0.5 + 0.6 – Tạo zaloHelper.ts và api.ts
 Bước 4: Phần 1 – app.tsx, BottomNav, ComingSoon component
 Bước 5: Phần 15 – LoadingSpinner, ErrorState
 Bước 6: Phần 2 – Trang chủ (cần store và components từ bước 4–5)
-Bước 7: Phần 3 – Trang tin tức
 Bước 8: Phần 4, 5, 6 – DVC, iHanoi, VNeID (WebView – đơn giản)
 Bước 9: Phần 7 – Phản ánh hiện trường (phức tạp nhất, để sau khi quen)
 Bước 10: Phần 8 – Đặt lịch tiếp dân

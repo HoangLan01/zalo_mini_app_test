@@ -18,26 +18,30 @@ model OAToken {
   @@map("oa_tokens")
 }
 
-model Article {
-  id           String   @id
-  title        String
-  description  String?
-  content      String?
-  thumbnailUrl String?
-  category     String   @default("Tin tức") @db.VarChar(50)
-  publishedAt  DateTime @db.Timestamptz(6)
-  author       String?  @default("Admin") @db.VarChar(100)
-  createdAt    DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt    DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+model User {
+  id           String        @id @default(uuid())
+  zaloId       String?       @unique @db.VarChar(64)
+  displayName  String        @db.VarChar(255)
+  avatarUrl    String?
+  email        String?       @unique @db.VarChar(255)
+  passwordHash String?
+  phoneToken   String?
+  role         UserRole      @default(USER)
+  createdAt    DateTime      @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime      @default(now()) @updatedAt @db.Timestamptz(6)
+  bookings     Booking[]
+  feedbacks    Feedback[]
+  ratings      Rating[]
+  attempts     QuizAttempt[]
 
-  @@index([publishedAt(sort: Desc)])
-  @@map("articles")
+  @@index([createdAt(sort: Desc)])
+  @@index([zaloId])
+  @@index([email])
+  @@map("users")
 }
 
-/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
-model bookings {
-  id              String        @id
+model Booking {
+  id              String        @id @default(uuid())
   code            String        @unique @db.VarChar(20)
   userId          String
   field           BookingField
@@ -54,19 +58,18 @@ model bookings {
   reminder1hSent  Boolean       @default(false)
   oaMessageId     String?
   createdAt       DateTime      @default(now()) @db.Timestamptz(6)
-  updatedAt       DateTime      @default(now()) @db.Timestamptz(6)
-  users           users         @relation(fields: [userId], references: [id])
+  updatedAt       DateTime      @updatedAt @db.Timestamptz(6)
+  user            User          @relation(fields: [userId], references: [id])
 
   @@index([createdAt(sort: Desc)])
   @@index([status])
   @@index([userId])
   @@index([userId, status])
+  @@map("bookings")
 }
 
-/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
-model feedbacks {
-  id          String           @id
+model Feedback {
+  id          String           @id @default(uuid())
   code        String           @unique @db.VarChar(20)
   userId      String
   title       String           @db.VarChar(100)
@@ -81,19 +84,18 @@ model feedbacks {
   respondedAt DateTime?        @db.Timestamptz(6)
   oaMessageId String?
   createdAt   DateTime         @default(now()) @db.Timestamptz(6)
-  updatedAt   DateTime         @default(now()) @db.Timestamptz(6)
-  users       users            @relation(fields: [userId], references: [id])
+  updatedAt   DateTime         @updatedAt @db.Timestamptz(6)
+  user        User             @relation(fields: [userId], references: [id])
 
   @@index([createdAt(sort: Desc)])
   @@index([status])
   @@index([userId])
   @@index([userId, status])
+  @@map("feedbacks")
 }
 
-/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
-model ratings {
-  id              String   @id
+model Rating {
+  id              String   @id @default(uuid())
   userId          String
   procedure       String   @db.VarChar(100)
   attitudeScore   Int      @db.SmallInt
@@ -103,28 +105,187 @@ model ratings {
   comment         String?
   alertSent       Boolean  @default(false)
   createdAt       DateTime @default(now()) @db.Timestamptz(6)
-  users           users    @relation(fields: [userId], references: [id])
+  user            User     @relation(fields: [userId], references: [id])
 
   @@index([averageScore], map: "ratings_avgScore_idx")
   @@index([createdAt(sort: Desc)])
   @@index([userId])
+  @@map("ratings")
 }
 
-/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
-model users {
-  id          String      @id
-  zaloId      String      @unique @db.VarChar(64)
-  displayName String      @db.VarChar(255)
-  phoneToken  String?
-  createdAt   DateTime    @default(now()) @db.Timestamptz(6)
-  updatedAt   DateTime    @default(now()) @db.Timestamptz(6)
-  bookings    bookings[]
-  feedbacks   feedbacks[]
-  ratings     ratings[]
+model Event {
+  id           String        @id @default(uuid())
+  title        String        @db.VarChar(255)
+  description  String
+  category     EventCategory @default(KHAC)
+  location     String        @db.VarChar(255)
+  startAt      DateTime      @db.Timestamptz(6)
+  endAt        DateTime      @db.Timestamptz(6)
+  organizer    String        @db.VarChar(255)
+  contactInfo  String?
+  imageUrls    String[]      @default([])
+  thumbnailUrl String
+  status       EventStatus   @default(DRAFT)
+  order        Int           @default(0)
+  publishedAt  DateTime?     @db.Timestamptz(6)
+  closedAt     DateTime?     @db.Timestamptz(6)
+  archivedAt   DateTime?     @db.Timestamptz(6)
+  createdAt    DateTime      @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime      @updatedAt @db.Timestamptz(6)
 
+  @@index([status, archivedAt, startAt])
   @@index([createdAt(sort: Desc)])
-  @@index([zaloId])
+  @@map("events")
+}
+
+model QuizTopic {
+  id          String    @id @default(uuid())
+  slug        String    @unique @db.VarChar(120)
+  title       String    @db.VarChar(255)
+  description String?
+  order       Int       @default(0)
+  isActive    Boolean   @default(true)
+  archivedAt  DateTime? @db.Timestamptz(6)
+  createdAt   DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @db.Timestamptz(6)
+  sets        QuizSet[]
+
+  @@index([isActive, archivedAt, order])
+  @@map("quiz_topics")
+}
+
+model QuizSet {
+  id          String        @id @default(uuid())
+  topicId     String
+  title       String        @db.VarChar(255)
+  description String?
+  timeLimit   Int
+  status      QuizSetStatus @default(DRAFT)
+  version     Int           @default(1)
+  order       Int           @default(0)
+  publishedAt DateTime?     @db.Timestamptz(6)
+  closedAt    DateTime?     @db.Timestamptz(6)
+  archivedAt  DateTime?     @db.Timestamptz(6)
+  createdAt   DateTime      @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime      @updatedAt @db.Timestamptz(6)
+  topic       QuizTopic     @relation(fields: [topicId], references: [id])
+  questions   QuizQuestion[]
+  attempts    QuizAttempt[]
+
+  @@index([topicId, status, archivedAt, order])
+  @@map("quiz_sets")
+}
+
+model QuizQuestion {
+  id          String       @id @default(uuid())
+  quizSetId   String
+  content     String
+  type        QuestionType @default(MULTIPLE_CHOICE)
+  points      Int          @default(10)
+  order       Int          @default(0)
+  explanation String?
+  archivedAt  DateTime?    @db.Timestamptz(6)
+  createdAt   DateTime     @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime     @updatedAt @db.Timestamptz(6)
+  quizSet     QuizSet      @relation(fields: [quizSetId], references: [id])
+  options     QuizOption[]
+  answers     QuizAttemptAnswer[]
+
+  @@index([quizSetId, archivedAt, order])
+  @@map("quiz_questions")
+}
+
+model QuizOption {
+  id          String              @id @default(uuid())
+  questionId  String
+  content     String
+  order       Int                 @default(0)
+  isCorrect   Boolean             @default(false)
+  archivedAt  DateTime?           @db.Timestamptz(6)
+  createdAt   DateTime            @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime            @updatedAt @db.Timestamptz(6)
+  question    QuizQuestion        @relation(fields: [questionId], references: [id])
+  answers     QuizAttemptAnswer[]
+
+  @@index([questionId, archivedAt, order])
+  @@map("quiz_options")
+}
+
+model QuizAttempt {
+  id          String              @id @default(uuid())
+  userId      String
+  quizSetId   String
+  score       Int                 @default(0)
+  maxScore    Int                 @default(0)
+  timeTaken   Int                 @default(0)
+  status      QuizAttemptStatus   @default(IN_PROGRESS)
+  startedAt   DateTime            @default(now()) @db.Timestamptz(6)
+  submittedAt DateTime?           @db.Timestamptz(6)
+  user        User                @relation(fields: [userId], references: [id])
+  quizSet     QuizSet             @relation(fields: [quizSetId], references: [id])
+  answers     QuizAttemptAnswer[]
+
+  @@unique([userId, quizSetId])
+  @@index([quizSetId, score(sort: Desc), timeTaken, submittedAt])
+  @@map("quiz_attempts")
+}
+
+model QuizAttemptAnswer {
+  id                    String       @id @default(uuid())
+  attemptId             String
+  questionId            String
+  selectedOptionId      String?
+  isCorrect             Boolean      @default(false)
+  pointsAwarded         Int          @default(0)
+  questionContent       String
+  selectedOptionContent String?
+  correctOptionContent  String?
+  createdAt             DateTime     @default(now()) @db.Timestamptz(6)
+  attempt               QuizAttempt  @relation(fields: [attemptId], references: [id])
+  question              QuizQuestion @relation(fields: [questionId], references: [id])
+  selectedOption        QuizOption?  @relation(fields: [selectedOptionId], references: [id])
+
+  @@index([attemptId])
+  @@index([questionId])
+  @@map("quiz_attempt_answers")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum QuizSetStatus {
+  DRAFT
+  PUBLISHED
+  CLOSED
+  ARCHIVED
+}
+
+enum QuestionType {
+  MULTIPLE_CHOICE
+  TRUE_FALSE
+}
+
+enum QuizAttemptStatus {
+  IN_PROGRESS
+  SUBMITTED
+  EXPIRED
+}
+
+enum EventStatus {
+  DRAFT
+  PUBLISHED
+  CLOSED
+  ARCHIVED
+}
+
+enum EventCategory {
+  VAN_HOA
+  THE_THAO
+  HANH_CHINH
+  LE_HOI
+  KHAC
 }
 
 enum FeedbackStatus {

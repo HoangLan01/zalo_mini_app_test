@@ -9,7 +9,8 @@
     "start": "node dist/server.js",
     "db:migrate": "npx prisma migrate dev",
     "db:generate": "npx prisma generate",
-    "db:studio": "npx prisma studio"
+    "db:studio": "npx prisma studio",
+    "db:seed:quiz": "ts-node src/seedQuiz.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.x",

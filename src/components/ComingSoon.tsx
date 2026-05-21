@@ -1,5 +1,5 @@
-import { Page, Button, Text, Box } from 'zmp-ui';
-import { useNavigate } from 'zmp-ui';
+import React from 'react';
+import { Page, Text, Box, useNavigate } from 'zmp-ui';
 import PageHeader from './PageHeader';
 
 interface ComingSoonProps {
@@ -12,31 +12,41 @@ const ComingSoon: React.FC<ComingSoonProps> = ({ title = 'Đang phát triển' }
   return (
     <Page style={{ backgroundColor: 'var(--surface)', height: '100%', display: 'flex', flexDirection: 'column' }}>
       <PageHeader title={title} />
-      <Box style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center', padding: '0 32px', paddingBottom: '160px' }}>
-        {/* Animated illustration */}
+      <Box
+        style={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          alignItems: 'center',
+          textAlign: 'center',
+          padding: '0 32px',
+          paddingBottom: '160px',
+        }}
+      >
         <div className="animate-bounce-in" style={{ marginBottom: '24px' }}>
-          <svg width="120" height="120" viewBox="0 0 120 120" fill="none">
-            <circle cx="60" cy="60" r="56" fill="url(#grad1)" opacity="0.1"/>
-            <circle cx="60" cy="60" r="40" fill="url(#grad1)" opacity="0.08"/>
+          <svg width="112" height="112" viewBox="0 0 120 120" fill="none" aria-hidden="true">
+            <circle cx="60" cy="60" r="56" fill="url(#coming-soon-grad)" opacity="0.1" />
+            <circle cx="60" cy="60" r="40" fill="url(#coming-soon-grad)" opacity="0.08" />
             <g className="animate-float">
-              <rect x="35" y="50" width="50" height="35" rx="6" fill="#246BFD" opacity="0.2"/>
-              <rect x="40" y="45" width="40" height="30" rx="5" fill="#246BFD" opacity="0.4"/>
-              <rect x="45" y="40" width="30" height="25" rx="4" fill="#246BFD" opacity="0.7"/>
-              <path d="M55 48L65 55L55 62V48Z" fill="white"/>
+              <rect x="35" y="50" width="50" height="35" rx="6" fill="#0052cc" opacity="0.2" />
+              <rect x="40" y="45" width="40" height="30" rx="5" fill="#0052cc" opacity="0.4" />
+              <rect x="45" y="40" width="30" height="25" rx="4" fill="#0052cc" opacity="0.72" />
+              <path d="M55 48L65 55L55 62V48Z" fill="white" />
             </g>
-            <circle cx="85" cy="30" r="4" fill="#F59E0B" className="animate-pulse"/>
-            <circle cx="30" cy="35" r="3" fill="#10B981" className="animate-pulse delay-200"/>
-            <circle cx="90" cy="70" r="3" fill="#EF4444" className="animate-pulse delay-400"/>
+            <circle cx="85" cy="30" r="4" fill="#F59E0B" className="animate-pulse" />
+            <circle cx="30" cy="35" r="3" fill="#10B981" className="animate-pulse delay-200" />
+            <circle cx="90" cy="70" r="3" fill="#EF4444" className="animate-pulse delay-400" />
             <defs>
-              <linearGradient id="grad1" x1="0" y1="0" x2="120" y2="120">
-                <stop stopColor="#246BFD"/>
-                <stop offset="1" stopColor="#7C5CFC"/>
+              <linearGradient id="coming-soon-grad" x1="0" y1="0" x2="120" y2="120">
+                <stop stopColor="#0052cc" />
+                <stop offset="1" stopColor="#00b8d9" />
               </linearGradient>
             </defs>
           </svg>
         </div>
 
-        <Text style={{ fontSize: '20px', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '8px', letterSpacing: '-0.02em' }}>
+        <Text style={{ fontSize: '20px', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '8px' }}>
           {title}
         </Text>
         <Text style={{ color: 'var(--text-muted)', marginBottom: '28px', fontSize: '14px', lineHeight: '1.6' }}>
@@ -53,10 +63,10 @@ const ComingSoon: React.FC<ComingSoonProps> = ({ title = 'Đang phát triển' }
             fontWeight: 700,
             fontSize: '14px',
             cursor: 'pointer',
-            transition: 'all 0.2s ease'
+            transition: 'all 0.2s ease',
           }}
         >
-          ← Quay lại
+          Quay lại
         </button>
       </Box>
     </Page>

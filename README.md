@@ -2,7 +2,7 @@
 
 ZaUI Uni là bộ giao diện mẫu (Template) dành cho các ứng dụng giáo dục trên nền tảng Zalo Mini App, tập trung vào trải nghiệm tra cứu thông tin học tập, đăng ký tuyển sinh.
 
-Template này bao gồm đầy đủ các tính năng từ trang chủ tin tức, danh mục ngành đào tạo, lịch học, đăng ký học bổng cho đến hồ sơ cá nhân sinh viên.
+Template này bao gồm đầy đủ các tính năng từ trang chủ, danh mục ngành đào tạo, lịch học, đăng ký học bổng cho đến hồ sơ cá nhân sinh viên.
 
 # Demo
 
@@ -20,7 +20,7 @@ Template này bao gồm đầy đủ các tính năng từ trang chủ tin tức
 
 ## Tính năng chính
 
-- **Trang chủ**: Hiển thị banner, menu shortcut nhanh, tin tức và video nổi bật từ trường.
+- **Trang chủ**: Hiển thị banner và menu shortcut nhanh cho các tính năng chính.
 - **Ngành đào tạo**: Duyệt danh mục ngành học theo khoa, xem chi tiết giới thiệu, giảng viên và tiêu chí xét tuyển.
 - **Đăng ký học bổng**: Form nhập thông tin cá nhân, chọn ngành xét tuyển với DatePicker và Select động.
 - **Lịch học**: Xem thời khóa biểu theo môn học, có bộ lọc và chọn ngày.
@@ -109,7 +109,7 @@ src/
 │   │   └── categories.query.ts    # TanStack Query hooks
 │   ├── schedule/         # (cấu trúc tương tự)
 │   ├── profile/          # (cấu trúc tương tự)
-│   └── home/             # Tin tức + Video cho trang chủ
+│   └── home/             # Nội dung trang chủ
 ├── lib/
 │   └── api.ts            # Axios instance (base URL, timeout, headers)
 ├── pages/                # Các màn hình chính
@@ -119,7 +119,6 @@ src/
 │   ├── ProfilePage.tsx
 │   ├── ScholarshipPage.tsx
 │   ├── DepartmentDetailPage.tsx
-│   ├── NewsDetailPage.tsx
 │   └── ShortcutsPage.tsx
 ├── utils/
 │   └── navigation.ts     # Điều hướng có animation
