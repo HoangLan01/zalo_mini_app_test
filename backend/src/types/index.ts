@@ -28,7 +28,7 @@ export interface ApiError {
 declare global {
   namespace Express {
     interface Request {
-      user?: { userId: string; zaloId: string }
+      user?: { userId: string; zaloId?: string; role?: string }
     }
   }
 }

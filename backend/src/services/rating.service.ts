@@ -64,7 +64,7 @@ export const getRatingSummary = async (): Promise<RatingSummary> => {
   }
 
   const avgResult = await prisma.rating.aggregate({ _avg: { averageScore: true } });
-  const averageScore = Math.round((avgResult._avg.averageScore || 0) * 10) / 10;
+  const averageScore = Math.round(Number(avgResult._avg.averageScore || 0) * 10) / 10;
 
   // Manual distribution calculation since Prisma groupBy on computed values isn't straightforward
   // without raw SQL, but we can do a simple Prisma groupBy on rounded fields if we had them.
@@ -73,7 +73,7 @@ export const getRatingSummary = async (): Promise<RatingSummary> => {
   
   const distMap: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
   for (const r of ratings) {
-    const star = Math.round(r.averageScore);
+    const star = Math.round(Number(r.averageScore));
     if (distMap[star] !== undefined) distMap[star]++;
   }
 

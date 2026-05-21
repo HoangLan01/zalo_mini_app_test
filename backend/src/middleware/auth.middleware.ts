@@ -17,8 +17,8 @@ export const authenticateToken = (req: Request, res: Response, next: NextFunctio
     const secret = process.env.JWT_SECRET;
     if (!secret) throw new Error('JWT_SECRET is not configured');
     
-    const decoded = jwt.verify(token, secret) as { userId: string; zaloId: string };
-    req.user = { userId: decoded.userId, zaloId: decoded.zaloId };
+    const decoded = jwt.verify(token, secret) as { userId: string; zaloId?: string; role?: string };
+    req.user = { userId: decoded.userId, zaloId: decoded.zaloId, role: decoded.role };
     next();
   } catch (error) {
     return res.status(401).json({
@@ -26,4 +26,15 @@ export const authenticateToken = (req: Request, res: Response, next: NextFunctio
       error: { code: 'TOKEN_INVALID', message: 'Phiên đăng nhập không hợp lệ hoặc đã hết hạn' }
     });
   }
+};
+
+export const requireAdmin = (req: Request, res: Response, next: NextFunction) => {
+  if (req.user?.role !== 'ADMIN') {
+    return res.status(403).json({
+      success: false,
+      error: { code: 'FORBIDDEN', message: 'Bạn không có quyền quản trị' }
+    });
+  }
+
+  next();
 };

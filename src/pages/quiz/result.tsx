@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect } from 'react';
 import { Page, Box, Text, Button, useNavigate } from 'zmp-ui';
 import { useLocation } from 'react-router-dom';
 import PageHeader from '@/components/PageHeader';
@@ -7,28 +7,17 @@ import { useQuizStore } from '@/store/quizStore';
 const QuizResultPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const quizId = location.state?.quizId as string;
-  
-  const getQuizById = useQuizStore(state => state.getQuizById);
-  const getAttempt = useQuizStore(state => state.getAttempt);
-  
-  const quiz = getQuizById(quizId);
-  const attempt = getAttempt(quizId);
+  const setId = location.state?.setId as string;
+  const { result, leaderboard, isLoading, error, fetchResult, fetchLeaderboard } = useQuizStore();
 
-  if (!quiz || !attempt) {
-    return (
-      <Page>
-        <PageHeader title="Kết quả" />
-        <Box style={{ padding: '20px', textAlign: 'center' }}>
-          <Text>Không tìm thấy kết quả!</Text>
-          <Button onClick={() => navigate('/quiz')} style={{ marginTop: '16px' }}>Quay lại</Button>
-        </Box>
-      </Page>
-    );
-  }
-
-  const maxScore = quiz.questions.reduce((sum, q) => sum + q.points, 0);
-  const isPerfect = attempt.score === maxScore;
+  useEffect(() => {
+    if (!setId) {
+      navigate('/quiz', { replace: true });
+      return;
+    }
+    fetchResult(setId);
+    fetchLeaderboard(setId);
+  }, [fetchLeaderboard, fetchResult, navigate, setId]);
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -36,105 +25,111 @@ const QuizResultPage: React.FC = () => {
     return `${m} phút ${s} giây`;
   };
 
-  // Fake leaderboard data mixing current user
-  const leaderboard = useMemo(() => {
-    const fakeOthers = [
-      { id: '1', name: 'Nguyễn Văn A', score: maxScore, timeTaken: 120, isMe: false },
-      { id: '2', name: 'Trần Thị B', score: maxScore - 10, timeTaken: 150, isMe: false },
-      { id: '3', name: 'Lê Hoàng C', score: maxScore - 20, timeTaken: 200, isMe: false }
-    ];
-    
-    const all = [...fakeOthers, { id: 'me', name: 'Bạn (Hiện tại)', score: attempt.score, timeTaken: attempt.timeTaken, isMe: true }];
-    return all.sort((a, b) => {
-      if (b.score !== a.score) return b.score - a.score;
-      return a.timeTaken - b.timeTaken;
-    });
-  }, [attempt.score, attempt.timeTaken, maxScore]);
+  if (isLoading || !result) {
+    return (
+      <Page>
+        <PageHeader title="Kết quả" />
+        <Box style={{ padding: '20px', textAlign: 'center' }}>
+          <Text>{error || 'Đang tải kết quả...'}</Text>
+          {error && <Button onClick={() => navigate('/quiz')} style={{ marginTop: '16px' }}>Quay lại</Button>}
+        </Box>
+      </Page>
+    );
+  }
+
+  const rank = leaderboard.findIndex(item => item.id === result.id) + 1;
+  const isPerfect = result.score === result.maxScore;
 
   return (
     <Page className="page" style={{ backgroundColor: '#F5F5F5', height: '100%', display: 'flex', flexDirection: 'column' }}>
       <PageHeader title="Kết quả bài thi" />
-      
+
       <Box style={{ flex: 1, overflow: 'auto', paddingBottom: '80px' }}>
-        {/* Score Banner */}
-        <Box style={{ 
-          backgroundColor: isPerfect ? '#10B981' : '#246BFD', 
-          padding: '32px 20px', 
+        <Box style={{
+          backgroundColor: isPerfect ? '#10B981' : '#246BFD',
+          padding: '32px 20px',
           color: '#FFF',
           textAlign: 'center',
-          display: 'flex', flexDirection: 'column', alignItems: 'center'
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center'
         }}>
-          <div style={{ 
-            width: '80px', height: '80px', borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.2)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px'
-          }}>
-            {isPerfect ? (
-              <svg width="40" height="40" viewBox="0 0 24 24" fill="white" stroke="white" strokeWidth="1">
-                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-              </svg>
-            ) : (
-              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="20 6 9 17 4 12"/>
-              </svg>
-            )}
-          </div>
-          <Text style={{ fontSize: '16px', opacity: 0.9 }}>Điểm số của bạn</Text>
-          <Text style={{ fontSize: '48px', fontWeight: 800, lineHeight: '1.2' }}>{attempt.score}<span style={{ fontSize: '24px', opacity: 0.8 }}>/{maxScore}</span></Text>
-          
+          <Text style={{ fontSize: '15px', opacity: 0.9, color: '#fff' }}>{result.quizSet.title}</Text>
+          <Text style={{ fontSize: '16px', opacity: 0.9, marginTop: '20px', color: '#fff' }}>Điểm số của bạn</Text>
+          <Text style={{ fontSize: '48px', fontWeight: 800, lineHeight: '1.2', color: '#fff' }}>
+            {result.score}<span style={{ fontSize: '24px', opacity: 0.8 }}>/{result.maxScore}</span>
+          </Text>
+
           <div style={{ display: 'flex', gap: '24px', marginTop: '24px', backgroundColor: 'rgba(0,0,0,0.1)', padding: '12px 24px', borderRadius: '12px' }}>
             <div style={{ textAlign: 'center' }}>
-              <Text style={{ fontSize: '12px', opacity: 0.8 }}>Thời gian</Text>
-              <Text style={{ fontSize: '16px', fontWeight: 600 }}>{formatTime(attempt.timeTaken)}</Text>
+              <Text style={{ fontSize: '12px', opacity: 0.8, color: '#fff' }}>Thời gian</Text>
+              <Text style={{ fontSize: '16px', fontWeight: 700, color: '#fff' }}>{formatTime(result.timeTaken)}</Text>
             </div>
             <div style={{ width: '1px', backgroundColor: 'rgba(255,255,255,0.2)' }} />
             <div style={{ textAlign: 'center' }}>
-              <Text style={{ fontSize: '12px', opacity: 0.8 }}>Xếp hạng</Text>
-              <Text style={{ fontSize: '16px', fontWeight: 600 }}>#{leaderboard.findIndex(l => l.isMe) + 1}</Text>
+              <Text style={{ fontSize: '12px', opacity: 0.8, color: '#fff' }}>Xếp hạng</Text>
+              <Text style={{ fontSize: '16px', fontWeight: 700, color: '#fff' }}>{rank > 0 ? `#${rank}` : 'Ngoài top'}</Text>
             </div>
           </div>
         </Box>
 
-        {/* Leaderboard */}
         <Box style={{ padding: '20px' }}>
-          <Text style={{ fontSize: '18px', fontWeight: 700, color: '#1A1A1A', marginBottom: '16px' }}>
-            🏆 Bảng xếp hạng Top 10
+          <Text style={{ fontSize: '18px', fontWeight: 800, color: '#1A1A1A', marginBottom: '16px' }}>
+            Bảng xếp hạng Top 10
           </Text>
-          
+
           <div style={{ backgroundColor: '#FFF', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-            {leaderboard.map((item, index) => (
-              <div 
-                key={item.id}
-                style={{ 
-                  display: 'flex', alignItems: 'center', padding: '16px',
-                  borderBottom: index < leaderboard.length - 1 ? '1px solid #F3F4F6' : 'none',
-                  backgroundColor: item.isMe ? '#EFF6FF' : '#FFF'
-                }}
-              >
-                <div style={{ 
-                  width: '28px', height: '28px', borderRadius: '14px', 
-                  backgroundColor: index === 0 ? '#FEF08A' : index === 1 ? '#E5E7EB' : index === 2 ? '#FED7AA' : '#F3F4F6',
-                  color: index < 3 ? '#92400E' : '#6B7280',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontWeight: 700, fontSize: '14px', marginRight: '16px'
-                }}>
-                  {index + 1}
-                </div>
-                
-                <div style={{ flex: 1 }}>
-                  <Text style={{ fontSize: '15px', fontWeight: item.isMe ? 700 : 500, color: item.isMe ? '#1E3A8A' : '#374151' }}>
-                    {item.name}
+            {leaderboard.map((item, index) => {
+              const isMe = item.id === result.id;
+              return (
+                <div
+                  key={item.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    padding: '16px',
+                    borderBottom: index < leaderboard.length - 1 ? '1px solid #F3F4F6' : 'none',
+                    backgroundColor: isMe ? '#EFF6FF' : '#FFF'
+                  }}
+                >
+                  <div style={{
+                    width: '28px',
+                    height: '28px',
+                    borderRadius: '14px',
+                    backgroundColor: index === 0 ? '#FEF08A' : index === 1 ? '#E5E7EB' : index === 2 ? '#FED7AA' : '#F3F4F6',
+                    color: index < 3 ? '#92400E' : '#6B7280',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontWeight: 800,
+                    fontSize: '14px',
+                    marginRight: '16px'
+                  }}>
+                    {index + 1}
+                  </div>
+
+                  <div style={{ flex: 1 }}>
+                    <Text style={{ fontSize: '15px', fontWeight: isMe ? 800 : 600, color: isMe ? '#1E3A8A' : '#374151' }}>
+                      {item.user.displayName}
+                    </Text>
+                    <Text style={{ fontSize: '12px', color: '#6B7280' }}>
+                      {formatTime(item.timeTaken)}
+                    </Text>
+                  </div>
+
+                  <Text style={{ fontSize: '16px', fontWeight: 800, color: '#059669' }}>
+                    {item.score} đ
                   </Text>
-                  <Text style={{ fontSize: '12px', color: '#6B7280' }}>
-                    {formatTime(item.timeTaken)}
-                  </Text>
                 </div>
-                
-                <Text style={{ fontSize: '16px', fontWeight: 700, color: '#059669' }}>
-                  {item.score} đ
-                </Text>
-              </div>
-            ))}
+              );
+            })}
           </div>
+        </Box>
+
+        <Box style={{ padding: '0 20px 20px' }}>
+          <Button fullWidth onClick={() => navigate('/quiz')}>
+            Về danh sách chủ đề
+          </Button>
         </Box>
       </Box>
     </Page>
