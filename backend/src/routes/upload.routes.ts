@@ -10,7 +10,7 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
     fileSize: 5 * 1024 * 1024, // 5MB
-    files: 3
+    files: 10
   },
   fileFilter: (req, file, cb) => {
     if (file.mimetype.startsWith('image/')) {
@@ -24,7 +24,7 @@ const upload = multer({
 router.post(
   '/', 
   authenticateToken, 
-  upload.array('files', 3), 
+  upload.array('files', 10), 
   uploadController.upload
 );
 

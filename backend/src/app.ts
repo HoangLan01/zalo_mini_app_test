@@ -16,12 +16,12 @@ import authRoutes from './routes/auth.routes';
 import feedbackRoutes from './routes/feedback.routes';
 import bookingRoutes from './routes/booking.routes';
 import ratingRoutes from './routes/rating.routes';
-import eventsRoutes from './routes/events.routes';
-import heritageRoutes from './routes/heritage.routes';
 import uploadRoutes from './routes/upload.routes';
 import webhookRoutes from './routes/webhook.routes';
 import quizRoutes from './routes/quiz.routes';
 import adminQuizRoutes from './routes/adminQuiz.routes';
+import eventsRoutes from './routes/events.routes';
+import adminEventsRoutes from './routes/adminEvents.routes';
 
 const app = express();
 
@@ -67,11 +67,11 @@ app.use('/api/auth', authRateLimiter, authRoutes);
 app.use('/api/feedbacks', feedbackRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/ratings', ratingRoutes);
-app.use('/api/events', eventsRoutes);
-app.use('/api/heritage', heritageRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/quiz', publicQuizRateLimiter, quizRoutes);
+app.use('/api/events', publicQuizRateLimiter, eventsRoutes);
 app.use('/api/admin/quiz', adminQuizRateLimiter, adminQuizRoutes);
+app.use('/api/admin/events', adminQuizRateLimiter, adminEventsRoutes);
 
 // 8. 404 Handler
 app.use((req, res, next) => {

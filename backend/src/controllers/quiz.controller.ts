@@ -228,3 +228,22 @@ export const getSetStats = async (req: Request, res: Response, next: NextFunctio
     next(error);
   }
 };
+
+export const batchSaveQuestions = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const data = await quizService.batchSaveQuestions(req.params.id, req.body);
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getDashboardStats = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { startDate, endDate } = req.query as { startDate?: string; endDate?: string };
+    const data = await quizService.getDashboardStats(startDate, endDate);
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+};

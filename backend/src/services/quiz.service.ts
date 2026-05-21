@@ -409,3 +409,183 @@ export const cloneSetToDraft = async (id: string) => {
     }
   });
 };
+
+export const batchSaveQuestions = async (quizSetId: string, data: {
+  questions: {
+    id?: string;
+    content: string;
+    type: 'MULTIPLE_CHOICE' | 'TRUE_FALSE';
+    points: number;
+    order?: number;
+    explanation?: string;
+    options: { content: string; order?: number; isCorrect: boolean }[];
+  }[];
+  deletedIds: string[];
+}) => {
+  return prisma.$transaction(async tx => {
+    if (data.deletedIds.length > 0) {
+      await tx.quizQuestion.updateMany({
+        where: { id: { in: data.deletedIds } },
+        data: { archivedAt: new Date() }
+      });
+    }
+
+    const results = [];
+    for (const q of data.questions) {
+      const qId = (q.id && q.id.startsWith('draft-')) ? undefined : q.id;
+      if (qId) {
+        if (q.options) {
+          await tx.quizOption.updateMany({
+            where: { questionId: qId, archivedAt: null },
+            data: { archivedAt: new Date() }
+          });
+        }
+        const updated = await tx.quizQuestion.update({
+          where: { id: qId },
+          data: {
+            content: q.content,
+            type: q.type,
+            points: q.points,
+            order: q.order,
+            explanation: q.explanation,
+            options: q.options ? {
+              create: q.options.map((opt, idx) => ({
+                content: opt.content,
+                order: opt.order ?? idx,
+                isCorrect: opt.isCorrect
+              }))
+            } : undefined
+          },
+          include: { options: { where: activeWhere, orderBy: { order: 'asc' } } }
+        });
+        results.push(updated);
+      } else {
+        const created = await tx.quizQuestion.create({
+          data: {
+            quizSetId,
+            content: q.content,
+            type: q.type,
+            points: q.points,
+            order: q.order || 0,
+            explanation: q.explanation,
+            options: {
+              create: q.options.map((opt, idx) => ({
+                content: opt.content,
+                order: opt.order ?? idx,
+                isCorrect: opt.isCorrect
+              }))
+            }
+          },
+          include: { options: { orderBy: { order: 'asc' } } }
+        });
+        results.push(created);
+      }
+    }
+    return results;
+  });
+};
+
+export const getDashboardStats = async (startDate?: string, endDate?: string) => {
+  const end = endDate ? new Date(endDate) : new Date();
+  end.setHours(23, 59, 59, 999);
+  
+  const start = startDate ? new Date(startDate) : new Date(end);
+  if (!startDate) {
+    start.setDate(end.getDate() - 13);
+  }
+  start.setHours(0, 0, 0, 0);
+
+  const [
+    totalUsers,
+    totalTopics,
+    totalSets,
+    totalAttempts,
+    statusGroups,
+    dailyRaw,
+    topUsersRaw,
+    recentAttempts
+  ] = await Promise.all([
+    prisma.user.count(),
+    prisma.quizTopic.count({ where: { archivedAt: null } }),
+    prisma.quizSet.count({ where: { archivedAt: null } }),
+    prisma.quizAttempt.count(),
+
+    prisma.quizSet.groupBy({
+      by: ['status'],
+      _count: true,
+      where: { archivedAt: null }
+    }),
+
+    prisma.$queryRaw<{ date: string; count: bigint }[]>`
+      SELECT DATE("startedAt" AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Ho_Chi_Minh') as date, COUNT(*)::bigint as count
+      FROM quiz_attempts
+      WHERE "startedAt" >= ${start}
+        AND "startedAt" <= ${end}
+      GROUP BY date
+      ORDER BY date ASC
+    `,
+
+    prisma.$queryRaw<{ userId: string; displayName: string; avatarUrl: string | null; totalScore: bigint; attemptCount: bigint }[]>`
+      SELECT u.id as "userId", u."displayName", u."avatarUrl",
+             SUM(a.score)::bigint as "totalScore",
+             COUNT(a.id)::bigint as "attemptCount"
+      FROM quiz_attempts a
+      JOIN users u ON u.id = a."userId"
+      WHERE a.status IN ('SUBMITTED', 'EXPIRED')
+      GROUP BY u.id, u."displayName", u."avatarUrl"
+      ORDER BY "totalScore" DESC, "attemptCount" DESC
+      LIMIT 10
+    `,
+
+    prisma.quizAttempt.findMany({
+      where: { status: { in: ['SUBMITTED', 'EXPIRED'] } },
+      orderBy: { submittedAt: 'desc' },
+      take: 10,
+      select: {
+        id: true,
+        score: true,
+        maxScore: true,
+        timeTaken: true,
+        submittedAt: true,
+        user: { select: { displayName: true, avatarUrl: true } },
+        quizSet: { select: { title: true } }
+      }
+    })
+  ]);
+
+  // Fill missing days in the selected range using Vietnam Timezone for keys
+  const dailyMap = new Map();
+  dailyRaw.forEach(r => {
+    // Ensure we handle different possible date formats from $queryRaw
+    const dateStr = (r.date as any) instanceof Date 
+      ? (r.date as any).toISOString().slice(0, 10) 
+      : String(r.date).slice(0, 10);
+    dailyMap.set(dateStr, Number(r.count));
+  });
+
+  const dailyAttempts: { date: string; count: number }[] = [];
+  const diffTime = Math.abs(end.getTime() - start.getTime());
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  
+  for (let i = 0; i <= diffDays; i++) {
+    const d = new Date(start);
+    d.setDate(d.getDate() + i);
+    // Format to YYYY-MM-DD in Vietnam timezone
+    const key = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(d);
+    dailyAttempts.push({ date: key, count: dailyMap.get(key) || 0 });
+  }
+
+  return {
+    summary: { totalUsers, totalTopics, totalSets, totalAttempts },
+    dailyAttempts,
+    statusDistribution: statusGroups.map(g => ({ status: g.status, count: g._count })),
+    topUsers: topUsersRaw.map(u => ({
+      userId: u.userId,
+      displayName: u.displayName,
+      avatarUrl: u.avatarUrl,
+      totalScore: Number(u.totalScore),
+      attemptCount: Number(u.attemptCount)
+    })),
+    recentAttempts
+  };
+};
