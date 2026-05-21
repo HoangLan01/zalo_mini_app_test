@@ -722,6 +722,64 @@ body, * {
   content: '';
 }
 
+.event-description-content {
+  color: var(--text-secondary);
+  font-size: 15px;
+  line-height: 1.8;
+  text-align: justify;
+}
+
+.event-description-content p,
+.event-description-content h2,
+.event-description-content h3,
+.event-description-content ul,
+.event-description-content ol {
+  margin: 0 0 14px;
+}
+
+.event-description-content h2 {
+  color: var(--text-primary);
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.35;
+  text-align: left;
+}
+
+.event-description-content h3 {
+  color: var(--text-primary);
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.4;
+  text-align: left;
+}
+
+.event-description-content ul,
+.event-description-content ol {
+  padding-left: 22px;
+  text-align: left;
+}
+
+.event-description-content li {
+  margin-bottom: 8px;
+}
+
+.event-description-content a {
+  color: var(--primary);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+  text-decoration: underline;
+}
+
+.event-description-content img {
+  border-radius: var(--radius-md);
+  display: block;
+  height: auto;
+  margin: 16px 0;
+  max-width: 100%;
+  object-fit: contain;
+  width: 100%;
+}
+
 /* ==================== Home Page Redesign ==================== */
 
 .home-page {

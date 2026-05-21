@@ -1,4 +1,5 @@
 import { EventCategory, EventStatus, Prisma } from '@prisma/client';
+import sanitizeHtml from 'sanitize-html';
 import { prisma } from '../server';
 
 type EventInput = {
@@ -28,22 +29,55 @@ const parseDate = (value: string | Date) => {
   return date;
 };
 
+const sanitizeEventDescription = (description: string) => {
+  const sanitized = sanitizeHtml(description || '', {
+    allowedTags: ['p', 'br', 'strong', 'em', 'u', 'h2', 'h3', 'ul', 'ol', 'li', 'a', 'img'],
+    allowedAttributes: {
+      a: ['href', 'target', 'rel'],
+      img: ['src', 'alt', 'title']
+    },
+    allowedSchemes: ['http', 'https', 'mailto'],
+    allowedSchemesByTag: {
+      img: ['http', 'https']
+    },
+    transformTags: {
+      a: sanitizeHtml.simpleTransform('a', {
+        target: '_blank',
+        rel: 'noopener noreferrer'
+      }, true)
+    }
+  }).trim();
+
+  const textContent = sanitizeHtml(sanitized, {
+    allowedTags: [],
+    allowedAttributes: {}
+  }).replace(/\s+/g, ' ').trim();
+
+  const hasImage = /<img\b[^>]*\bsrc=(["'])https?:\/\/[^"']+\1/i.test(sanitized);
+  if (!textContent && !hasImage) throw new Error('EVENT_MISSING_DESCRIPTION');
+  return sanitized;
+};
+
 const validateEventInput = (input: EventInput, publishing = false) => {
   const startAt = parseDate(input.startAt);
   const endAt = parseDate(input.endAt);
+  const description = sanitizeEventDescription(input.description);
 
   if (endAt < startAt) throw new Error('EVENT_INVALID_DATE_RANGE');
 
   const imageUrls = Array.from(new Set((input.imageUrls || []).filter(Boolean)));
+  const thumbnailUrl = input.thumbnailUrl || imageUrls[0] || '';
   if (publishing && imageUrls.length === 0) throw new Error('EVENT_MISSING_IMAGES');
-  if (publishing && !input.thumbnailUrl) throw new Error('EVENT_MISSING_THUMBNAIL');
-  if (input.thumbnailUrl && !imageUrls.includes(input.thumbnailUrl)) throw new Error('EVENT_THUMBNAIL_NOT_IN_IMAGES');
+  if (publishing && !thumbnailUrl) throw new Error('EVENT_MISSING_THUMBNAIL');
+  if (thumbnailUrl && !imageUrls.includes(thumbnailUrl)) throw new Error('EVENT_THUMBNAIL_NOT_IN_IMAGES');
 
   return {
     ...input,
+    description,
     startAt,
     endAt,
-    imageUrls
+    imageUrls,
+    thumbnailUrl
   };
 };
 

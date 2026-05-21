@@ -1,4 +1,5 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
+import DOMPurify from 'dompurify';
 import { Page, Box, Text } from 'zmp-ui';
 import { useLocation } from 'zmp-ui';
 import PageHeader from '@/components/PageHeader';
@@ -14,7 +15,10 @@ const formatDateTime = (value: string) => new Intl.DateTimeFormat('vi-VN', {
 
 const EventsDetailPage: React.FC = () => {
   const { state } = useLocation();
-  const eventId = state?.id as string | undefined;
+  const queryEventId = typeof window !== 'undefined'
+    ? new URLSearchParams(window.location.search).get('id') || undefined
+    : undefined;
+  const eventId = (state?.id as string | undefined) || queryEventId;
   const { currentEvent, isLoading, error, fetchEvent } = useEventStore();
 
   useEffect(() => {
@@ -22,34 +26,41 @@ const EventsDetailPage: React.FC = () => {
   }, [eventId, fetchEvent]);
 
   const event = currentEvent?.id === eventId ? currentEvent : null;
+  const gallery = useMemo(
+    () => event ? (event.imageUrls || []).filter(url => url !== event.thumbnailUrl) : [],
+    [event]
+  );
+  const sanitizedDescription = useMemo(() => DOMPurify.sanitize(event?.description ?? '', {
+    ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 'h2', 'h3', 'ul', 'ol', 'li', 'a', 'img'],
+    ALLOWED_ATTR: ['href', 'target', 'rel', 'src', 'alt', 'title'],
+    ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto):|[^a-z]|[a-z+.-]+(?:[^a-z+.-:]|$))/i
+  }), [event?.description]);
 
   if (isLoading) {
     return (
       <Page className="page" style={{ backgroundColor: 'var(--surface)', height: '100%', display: 'flex', flexDirection: 'column' }}>
-        <PageHeader title="Chi tiet su kien" />
+        <PageHeader title="Chi tiết sự kiện" />
         <Box style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Text style={{ color: 'var(--text-muted)' }}>Dang tai su kien...</Text>
+          <Text style={{ color: 'var(--text-muted)' }}>Đang tải sự kiện...</Text>
         </Box>
       </Page>
     );
   }
 
-  if (!event || error) {
+  if (!eventId || !event || error) {
     return (
       <Page className="page" style={{ backgroundColor: 'var(--surface)', height: '100%', display: 'flex', flexDirection: 'column' }}>
-        <PageHeader title="Chi tiet su kien" />
+        <PageHeader title="Chi tiết sự kiện" />
         <Box style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px', textAlign: 'center' }}>
-          <Text style={{ color: 'var(--text-muted)' }}>{error || 'Khong tim thay su kien.'}</Text>
+          <Text style={{ color: 'var(--text-muted)' }}>{error || 'Không tìm thấy sự kiện.'}</Text>
         </Box>
       </Page>
     );
   }
-
-  const gallery = (event.imageUrls || []).filter(url => url !== event.thumbnailUrl);
 
   return (
     <Page className="page" style={{ backgroundColor: 'var(--surface)', height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <PageHeader title="Chi tiet su kien" />
+      <PageHeader title="Chi tiết sự kiện" />
 
       <Box style={{ flex: 1, overflow: 'auto', paddingBottom: '160px' }}>
         <div className="animate-fade-in" style={{ width: '100%', height: '260px', position: 'relative' }}>
@@ -80,30 +91,30 @@ const EventsDetailPage: React.FC = () => {
 
           <div style={{ display: 'grid', gap: '12px', paddingBottom: '20px', borderBottom: '1px solid var(--border-light)', marginBottom: '20px' }}>
             <Text style={{ fontSize: '14px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
-              <strong>Thoi gian:</strong> {formatDateTime(event.startAt)} - {formatDateTime(event.endAt)}
+              <strong>Thời gian:</strong> {formatDateTime(event.startAt)} - {formatDateTime(event.endAt)}
             </Text>
             <Text style={{ fontSize: '14px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
-              <strong>Dia diem:</strong> {event.location}
+              <strong>Địa điểm:</strong> {event.location}
             </Text>
             <Text style={{ fontSize: '14px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
-              <strong>Don vi to chuc:</strong> {event.organizer}
+              <strong>Đơn vị tổ chức:</strong> {event.organizer}
             </Text>
             {event.contactInfo && (
               <Text style={{ fontSize: '14px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
-                <strong>Lien he:</strong> {event.contactInfo}
+                <strong>Liên hệ:</strong> {event.contactInfo}
               </Text>
             )}
           </div>
 
           <div
-            style={{ color: 'var(--text-secondary)', lineHeight: '1.8', fontSize: '15px', textAlign: 'justify' }}
-            dangerouslySetInnerHTML={{ __html: event.description }}
+            className="event-description-content"
+            dangerouslySetInnerHTML={{ __html: sanitizedDescription }}
           />
 
           {gallery.length > 0 && (
             <Box className="animate-fade-in-up delay-200" style={{ marginTop: '32px' }}>
               <Text style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '16px' }}>
-                Thu vien anh
+                Thư viện ảnh
               </Text>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
                 {gallery.map((img, idx) => (

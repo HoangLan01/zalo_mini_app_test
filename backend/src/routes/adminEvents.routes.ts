@@ -16,7 +16,7 @@ const eventBaseSchema = z.object({
   organizer: z.string().min(1).max(255),
   contactInfo: z.string().nullable().optional(),
   imageUrls: z.array(z.string().url()).default([]),
-  thumbnailUrl: z.string().url(),
+  thumbnailUrl: z.union([z.string().url(), z.literal('')]).default(''),
   order: z.number().int().min(0).optional()
 });
 

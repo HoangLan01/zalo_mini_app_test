@@ -14,16 +14,16 @@ type UploadOptions = {
 
 export const validateImageFiles = (files: Express.Multer.File[], maxFiles = 3): void => {
   if (files.length > maxFiles) {
-    throw new Error(`Chi cho phep tai len toi da ${maxFiles} anh`);
+    throw new Error(`Chỉ cho phép tải lên tối đa ${maxFiles} ảnh`);
   }
 
   const MAX_SIZE = 5 * 1024 * 1024; // 5MB
   for (const file of files) {
     if (file.size > MAX_SIZE) {
-      throw new Error(`File ${file.originalname} vuot qua dung luong 5MB`);
+      throw new Error(`File ${file.originalname} vượt quá dung lượng 5MB`);
     }
     if (!file.mimetype.startsWith('image/')) {
-      throw new Error(`File ${file.originalname} khong phai la dinh dang anh`);
+      throw new Error(`File ${file.originalname} không phải là định dạng ảnh`);
     }
   }
 };
@@ -43,7 +43,7 @@ export const uploadImages = async (files: Express.Multer.File[], options: Upload
         (error, result) => {
           if (error) return reject(error);
           if (result) return resolve(result.secure_url);
-          reject(new Error('Loi khong xac dinh khi upload'));
+          reject(new Error('Lỗi không xác định khi upload'));
         }
       );
       uploadStream.end(file.buffer);
