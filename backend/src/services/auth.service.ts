@@ -80,7 +80,7 @@ export const loginAdmin = async (email: string, password: string) => {
 };
 
 export const loginDevUser = async () => {
-  if (process.env.NODE_ENV === 'production' || process.env.ENABLE_DEV_AUTH === 'false') {
+  if (process.env.NODE_ENV === 'production' || process.env.ENABLE_DEV_AUTH !== 'true') {
     throw new Error('DEV_AUTH_DISABLED');
   }
 

@@ -15,8 +15,20 @@ const slugify = (value: string) => value
   .slice(0, 120);
 
 async function main() {
-  const adminEmail = process.env.ADMIN_EMAIL || 'admin@example.com';
-  const adminPassword = process.env.ADMIN_PASSWORD || 'Admin@123456';
+  const isProduction = process.env.NODE_ENV === 'production';
+  const defaultAdminEmail = 'admin@example.com';
+  const defaultAdminPassword = 'Admin@123456';
+  const adminEmail = process.env.ADMIN_EMAIL || (!isProduction ? defaultAdminEmail : '');
+  const adminPassword = process.env.ADMIN_PASSWORD || (!isProduction ? defaultAdminPassword : '');
+
+  if (!adminEmail || !adminPassword) {
+    throw new Error('ADMIN_EMAIL and ADMIN_PASSWORD must be set before seeding production data.');
+  }
+
+  if (isProduction && (adminEmail === defaultAdminEmail || adminPassword === defaultAdminPassword)) {
+    throw new Error('Default admin credentials are not allowed in production.');
+  }
+
   const passwordHash = await bcrypt.hash(adminPassword, 10);
 
   await prisma.user.upsert({
