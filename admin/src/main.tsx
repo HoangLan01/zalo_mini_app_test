@@ -49,6 +49,7 @@ import './styles.css';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 const TOKEN_KEY = 'quiz_admin_token';
+const BOOKING_NOTIFICATION_READ_KEY = 'booking_notification_read_ids';
 
 type ApiResponse<T> = { success: true; data: T } | { success: false; error: { code: string; message: string } };
 type Topic = { id: string; title: string; slug: string; description?: string; order: number; isActive: boolean; _count?: { sets: number } };
@@ -75,6 +76,35 @@ type ManagedEvent = {
 type EventListResponse = {
   items: ManagedEvent[];
   pagination: { page: number; limit: number; total: number; totalPages: number };
+};
+type BookingStatus = 'PENDING' | 'CONFIRMED' | 'REJECTED' | 'RESCHEDULED' | 'COMPLETED' | 'CANCELLED';
+type BookingField = 'HO_TICH' | 'CU_TRU' | 'CHUNG_THUC' | 'DAT_DAI' | 'XA_HOI' | 'KHAC';
+type ManagedBooking = {
+  id: string;
+  code: string;
+  field: BookingField;
+  preferredDate: string;
+  preferredTime: string;
+  confirmedDate?: string | null;
+  confirmedTime?: string | null;
+  description: string;
+  contactName: string;
+  contactPhone?: string | null;
+  status: BookingStatus;
+  rejectionReason?: string | null;
+  rescheduledNote?: string | null;
+  createdAt: string;
+  updatedAt?: string;
+  user?: { id: string; displayName: string; avatarUrl?: string | null; zaloId?: string | null };
+};
+type BookingListResponse = {
+  items: ManagedBooking[];
+  pagination: { page: number; limit: number; total: number; totalPages: number };
+};
+type BookingSummary = {
+  total: number;
+  pendingCount: number;
+  byStatus: Partial<Record<BookingStatus, number>>;
 };
 type QuizSet = {
   id: string;
@@ -105,7 +135,7 @@ type Stats = {
   averageTimeTaken: number;
   leaderboard: Array<{ id: string; score: number; maxScore: number; timeTaken: number; user: { displayName: string } }>;
 };
-type ViewMode = 'dashboard' | 'bank' | 'create' | 'guide' | 'events' | 'news' | 'procedures' | 'users' | 'settings';
+type ViewMode = 'dashboard' | 'bank' | 'create' | 'guide' | 'events' | 'bookings' | 'news' | 'procedures' | 'users' | 'settings';
 type DashboardData = {
   summary: { totalUsers: number; totalTopics: number; totalSets: number; totalAttempts: number };
   dailyAttempts: { date: string; count: number }[];
@@ -398,6 +428,7 @@ const getViewFromLocation = (): ViewMode => {
   if (v === 'guide') return 'guide';
   if (v === 'bank') return 'bank';
   if (v === 'events') return 'events';
+  if (v === 'bookings') return 'bookings';
   if (v === 'news') return 'news';
   if (v === 'procedures') return 'procedures';
   if (v === 'users') return 'users';
@@ -413,6 +444,20 @@ const buildViewUrl = (nextView: ViewMode) => {
     url.searchParams.set('view', nextView);
   }
   return `${url.pathname}${url.search}${url.hash}`;
+};
+
+const loadReadBookingNotificationIds = () => {
+  try {
+    const raw = localStorage.getItem(BOOKING_NOTIFICATION_READ_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : [];
+  } catch {
+    return [];
+  }
+};
+
+const saveBookingNotificationIds = (ids: string[]) => {
+  localStorage.setItem(BOOKING_NOTIFICATION_READ_KEY, JSON.stringify(Array.from(new Set(ids))));
 };
 
 function Login({ onLogin }: { onLogin: () => void }) {
@@ -484,6 +529,9 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   const [stats, setStats] = useState<Stats | null>(null);
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [dashboardRange, setDashboardRange] = useState({ start: '', end: '' });
+  const [bookingSummary, setBookingSummary] = useState<BookingSummary>({ total: 0, pendingCount: 0, byStatus: {} });
+  const [bookingNotifications, setBookingNotifications] = useState<ManagedBooking[]>([]);
+  const [readBookingNotificationIds, setReadBookingNotificationIds] = useState<string[]>(() => loadReadBookingNotificationIds());
 
   const selectedSet = useMemo(() => sets.find(item => item.id === selectedSetId), [sets, selectedSetId]);
   const filteredSets = useMemo(
@@ -498,6 +546,11 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
       question.options.some(option => option.content.toLowerCase().includes(query))
     );
   }, [questionSearch, questions]);
+  const unreadBookingCount = useMemo(
+    () => bookingNotifications.filter(item => !readBookingNotificationIds.includes(item.id)).length,
+    [bookingNotifications, readBookingNotificationIds]
+  );
+  const isQuizView = ['bank', 'create'].includes(view);
 
   const dashboardStats = useMemo(() => {
     const totalQuestions = sets.reduce((sum, set) => sum + (set._count?.questions || 0), 0);
@@ -509,10 +562,40 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
     ] as const;
   }, [sets]);
 
-  const showMessage = (text: string, tone: 'info' | 'error' = 'info') => {
+  const showMessage = useCallback((text: string, tone: 'info' | 'error' = 'info') => {
     setMessage(text);
     setMessageTone(tone);
-  };
+  }, []);
+
+  const applyBookingSummary = useCallback((nextSummary: BookingSummary) => {
+    setBookingSummary(prev => {
+      const keys = new Set([...Object.keys(prev.byStatus), ...Object.keys(nextSummary.byStatus)]);
+      const sameStatusCounts = Array.from(keys).every(key =>
+        (prev.byStatus[key as BookingStatus] || 0) === (nextSummary.byStatus[key as BookingStatus] || 0)
+      );
+      if (prev.total === nextSummary.total && prev.pendingCount === nextSummary.pendingCount && sameStatusCounts) {
+        return prev;
+      }
+      return nextSummary;
+    });
+  }, []);
+
+  const applyBookingNotifications = useCallback((nextItems: ManagedBooking[]) => {
+    setBookingNotifications(prev => {
+      const prevSignature = prev.map(item => `${item.id}:${item.status}:${item.updatedAt || item.createdAt}`).join('|');
+      const nextSignature = nextItems.map(item => `${item.id}:${item.status}:${item.updatedAt || item.createdAt}`).join('|');
+      return prevSignature === nextSignature ? prev : nextItems;
+    });
+  }, []);
+
+  const markBookingNotificationRead = useCallback((bookingId: string) => {
+    setReadBookingNotificationIds(prev => {
+      if (prev.includes(bookingId)) return prev;
+      const next = [...prev, bookingId];
+      saveBookingNotificationIds(next);
+      return next;
+    });
+  }, []);
 
   const navigateView = useCallback((nextView: ViewMode, mode: NavigationMode = 'push') => {
     const nextUrl = buildViewUrl(nextView);
@@ -554,6 +637,16 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
     setStats(await api<Stats>(`/api/admin/quiz/sets/${setId}/stats`));
   };
 
+  const loadBookingSummary = useCallback(async () => {
+    const data = await api<BookingSummary>('/api/admin/bookings/summary');
+    applyBookingSummary(data);
+  }, [applyBookingSummary]);
+
+  const loadBookingNotifications = useCallback(async () => {
+    const data = await api<BookingListResponse>('/api/admin/bookings?status=PENDING&limit=10');
+    applyBookingNotifications(data.items);
+  }, [applyBookingNotifications]);
+
   const refreshAll = async () => {
     setLoading(true);
     try {
@@ -569,8 +662,21 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   };
 
   useEffect(() => {
-    refreshAll().catch(err => showMessage(err instanceof Error ? err.message : 'Không thể tải dữ liệu', 'error'));
-  }, []);
+    if (!isQuizView) return;
+    loadTopics().catch(err => showMessage(err instanceof Error ? err.message : 'Không thể tải dữ liệu', 'error'));
+  }, [isQuizView]);
+
+  useEffect(() => {
+    const loadBookingHeader = () => view === 'bookings'
+      ? loadBookingNotifications()
+      : Promise.all([loadBookingSummary(), loadBookingNotifications()]);
+
+    loadBookingHeader().catch(err => showMessage(err instanceof Error ? err.message : 'Khong the tai thong bao lich hen', 'error'));
+    const timer = window.setInterval(() => {
+      if (!document.hidden) loadBookingHeader().catch(() => undefined);
+    }, 60000);
+    return () => window.clearInterval(timer);
+  }, [loadBookingNotifications, loadBookingSummary, showMessage, view]);
 
   useEffect(() => {
     if (view === 'dashboard') {
@@ -594,8 +700,9 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   }, []);
 
   useEffect(() => {
+    if (!isQuizView) return;
     loadSets(selectedTopicId).catch(err => showMessage(err instanceof Error ? err.message : 'Không thể tải bộ câu hỏi', 'error'));
-  }, [selectedTopicId]);
+  }, [isQuizView, selectedTopicId]);
 
   useEffect(() => {
     const nextSetId = filteredSets.some(set => set.id === selectedSetId) ? selectedSetId : filteredSets[0]?.id || '';
@@ -603,9 +710,10 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   }, [filteredSets, selectedSetId]);
 
   useEffect(() => {
+    if (!isQuizView) return;
     loadQuestions(selectedSetId).catch(err => showMessage(err instanceof Error ? err.message : 'Không thể tải câu hỏi', 'error'));
     loadStats(selectedSetId).catch(err => showMessage(err instanceof Error ? err.message : 'Không thể tải thống kê', 'error'));
-  }, [selectedSetId]);
+  }, [isQuizView, selectedSetId]);
 
   const action = async (fn: () => Promise<unknown>, successMessage?: string) => {
     setMessage('');
@@ -690,6 +798,11 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
       onCloneClick={() => openModal('SET_CLONE')}
       onCloseClick={() => openModal('SET_CLOSE')}
       onPublishClick={() => openModal('SET_PUBLISH')}
+      pendingBookingCount={unreadBookingCount}
+      bookingNotifications={bookingNotifications}
+      readBookingNotificationIds={readBookingNotificationIds}
+      onBookingNotificationRead={markBookingNotificationRead}
+      onReloadBookingNotifications={loadBookingNotifications}
     >
       {message && <Notice tone={messageTone} message={message} onClose={() => setMessage('')} />}
       
@@ -756,6 +869,8 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
         />
       ) : view === 'events' ? (
         <EventManagementView showMessage={showMessage} />
+      ) : view === 'bookings' ? (
+        <BookingManagementView showMessage={showMessage} onSummaryChange={applyBookingSummary} />
       ) : ['news', 'procedures', 'users', 'settings'].includes(view) ? (
         <ComingSoonView view={view} />
       ) : view === 'bank' ? (
@@ -810,7 +925,12 @@ function AdminShell({
   onSaveQuestion,
   onCloneClick,
   onCloseClick,
-  onPublishClick
+  onPublishClick,
+  pendingBookingCount,
+  bookingNotifications,
+  readBookingNotificationIds,
+  onBookingNotificationRead,
+  onReloadBookingNotifications
 }: {
   children: React.ReactNode;
   view: ViewMode;
@@ -821,7 +941,42 @@ function AdminShell({
   onCloneClick?: () => void;
   onCloseClick?: () => void;
   onPublishClick?: () => void;
+  pendingBookingCount: number;
+  bookingNotifications: ManagedBooking[];
+  readBookingNotificationIds: string[];
+  onBookingNotificationRead: (bookingId: string) => void;
+  onReloadBookingNotifications: () => Promise<void>;
 }) {
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const notificationButtonRef = useRef<HTMLButtonElement | null>(null);
+  const notificationPopoverRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!isNotificationOpen) return;
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (!notificationButtonRef.current?.contains(target) && !notificationPopoverRef.current?.contains(target)) {
+        setIsNotificationOpen(false);
+      }
+    };
+    window.addEventListener('mousedown', handlePointerDown);
+    return () => window.removeEventListener('mousedown', handlePointerDown);
+  }, [isNotificationOpen]);
+
+  const unreadNotifications = bookingNotifications.filter(item => !readBookingNotificationIds.includes(item.id));
+  const readNotifications = bookingNotifications.filter(item => readBookingNotificationIds.includes(item.id));
+  const orderedNotifications = [...unreadNotifications, ...readNotifications];
+
+  const openNotifications = () => {
+    setIsNotificationOpen(open => !open);
+    onReloadBookingNotifications().catch(() => undefined);
+  };
+
+  const selectNotification = (bookingId: string) => {
+    onBookingNotificationRead(bookingId);
+    setIsNotificationOpen(false);
+    onNavigate('bookings');
+  };
   const pageTitle = view === 'dashboard' ? 'Tổng quan' :
     view === 'bank' ? 'Ngân hàng câu hỏi' :
     view === 'events' ? 'Quản lý sự kiện' :
@@ -851,6 +1006,9 @@ function AdminShell({
           </button>
           <button className={view === 'events' ? 'nav-item active' : 'nav-item'} onClick={() => onNavigate('events')}>
             <CalendarDays size={20} /> Sự kiện
+          </button>
+          <button className={view === 'bookings' ? 'nav-item active' : 'nav-item'} onClick={() => onNavigate('bookings')}>
+            <Clock size={20} /> Lịch hẹn
           </button>
           <button className={view === 'procedures' ? 'nav-item active' : 'nav-item'} onClick={() => onNavigate('procedures')}>
             <ClipboardList size={20} /> Thủ tục hành chính
@@ -885,7 +1043,7 @@ function AdminShell({
             <div className="breadcrumb">
               {view === 'dashboard' ? (
                 <strong>Tổng quan hệ thống</strong>
-              ) : ['events', 'news', 'procedures', 'users', 'settings'].includes(view) ? (
+              ) : ['events', 'bookings', 'news', 'procedures', 'users', 'settings'].includes(view) ? (
                <button className="primary-button" onClick={() => onNavigate('dashboard')}>Về trang chủ</button>
              ) : (
                 <>
@@ -902,10 +1060,52 @@ function AdminShell({
                 </>
               )}
             </div>
-            <h1>{pageTitle}</h1>
+            <h1>{view === 'bookings' ? 'Quản lý lịch hẹn' : pageTitle}</h1>
           </div>
           <div className="topbar-actions">
-            <button className="icon-button notify" aria-label="Thông báo"><Bell size={21} /></button>
+            <button
+              ref={notificationButtonRef}
+              className={pendingBookingCount > 0 ? 'icon-button notify has-alert' : 'icon-button notify'}
+              aria-label="Thông báo lịch hẹn"
+              aria-expanded={isNotificationOpen}
+              onClick={openNotifications}
+              title="Lịch hẹn chờ xử lý"
+            >
+              <Bell size={21} />
+              {pendingBookingCount > 0 && <span className="notify-badge">{pendingBookingCount > 99 ? '99+' : pendingBookingCount}</span>}
+            </button>
+            {isNotificationOpen && (
+              <div className="notification-popover" role="dialog" aria-label="Thông báo lịch hẹn" ref={notificationPopoverRef}>
+                <div className="notification-popover-header">
+                  <strong>Thông báo lịch hẹn</strong>
+                  <span>{pendingBookingCount} chưa xem</span>
+                </div>
+                {orderedNotifications.length > 0 ? (
+                  <div className="notification-list">
+                    {orderedNotifications.map(item => {
+                      const isRead = readBookingNotificationIds.includes(item.id);
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          className={isRead ? 'notification-item read' : 'notification-item unread'}
+                          onClick={() => selectNotification(item.id)}
+                        >
+                          <span className="notification-dot" aria-hidden="true" />
+                          <span className="notification-body">
+                            <strong>{item.code} - {item.contactName || item.user?.displayName || 'Người đặt'}</strong>
+                            <small>{bookingFieldLabel(item.field)} · {formatBookingDate(item.preferredDate, item.preferredTime)}</small>
+                            <em>{isRead ? 'Đã xem' : 'Chưa xem'}</em>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="notification-empty">Chưa có lịch hẹn chờ xử lý</div>
+                )}
+              </div>
+            )}
             {view === 'dashboard' ? (
               null
             ) : view === 'bank' ? (
@@ -917,7 +1117,7 @@ function AdminShell({
               </>
             ) : view === 'guide' ? (
               <button className="primary-button" onClick={() => onNavigate('bank')}>Quay lại quản lý</button>
-            ) : view === 'events' ? (
+            ) : view === 'events' || view === 'bookings' ? (
               null
             ) : (
               <>
@@ -1260,6 +1460,285 @@ function SetEditorView({
         <button className="secondary-button" onClick={onCancel}><X size={18} /> Hủy</button>
         <button className="primary-button" onClick={() => onSave(questions, deletedIds)}><Save size={18} /> Lưu tất cả thay đổi</button>
       </footer>
+    </div>
+  );
+}
+
+const bookingFieldLabel = (field: BookingField) => {
+  const labels: Record<BookingField, string> = {
+    HO_TICH: 'Hộ tịch',
+    CU_TRU: 'Cư trú',
+    CHUNG_THUC: 'Chứng thực',
+    DAT_DAI: 'Đất đai - Xây dựng',
+    XA_HOI: 'Chính sách xã hội',
+    KHAC: 'Vấn đề khác'
+  };
+  return labels[field] || field;
+};
+
+const bookingStatusLabel = (status: BookingStatus) => {
+  const labels: Record<BookingStatus, string> = {
+    PENDING: 'Chờ xác nhận',
+    CONFIRMED: 'Đã xác nhận',
+    REJECTED: 'Đã từ chối',
+    RESCHEDULED: 'Đã dời lịch',
+    COMPLETED: 'Đã hoàn thành',
+    CANCELLED: 'Đã hủy'
+  };
+  return labels[status] || status;
+};
+
+const toDateInputValue = (value?: string | null) => {
+  if (!value) return '';
+  return new Date(value).toISOString().slice(0, 10);
+};
+
+const formatBookingDate = (date: string, time?: string | null) => {
+  const formatted = new Intl.DateTimeFormat('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
+  }).format(new Date(date));
+  return time ? `${formatted} - ${time}` : formatted;
+};
+
+function BookingManagementView({
+  showMessage,
+  onSummaryChange
+}: {
+  showMessage: (text: string, tone?: 'info' | 'error') => void;
+  onSummaryChange: (summary: BookingSummary) => void;
+}) {
+  const [bookings, setBookings] = useState<ManagedBooking[]>([]);
+  const [summary, setSummary] = useState<BookingSummary>({ total: 0, pendingCount: 0, byStatus: {} });
+  const [statusFilter, setStatusFilter] = useState('PENDING');
+  const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [modalState, setModalState] = useState<{ type: 'CONFIRMED' | 'REJECTED' | 'RESCHEDULED' | null; booking?: ManagedBooking }>({ type: null });
+  const [statusForm, setStatusForm] = useState({ confirmedDate: '', confirmedTime: '', rejectionReason: '', rescheduledNote: '' });
+
+  const loadSummary = useCallback(async () => {
+    const data = await api<BookingSummary>('/api/admin/bookings/summary');
+    setSummary(data);
+    onSummaryChange(data);
+  }, [onSummaryChange]);
+
+  const loadBookings = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (statusFilter !== 'ALL') params.set('status', statusFilter);
+      if (search.trim()) params.set('search', search.trim());
+      params.set('limit', '50');
+      const data = await api<BookingListResponse>(`/api/admin/bookings?${params.toString()}`);
+      setBookings(data.items);
+      await loadSummary();
+    } catch (err) {
+      showMessage(err instanceof Error ? err.message : 'Không thể tải lịch hẹn', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [loadSummary, search, showMessage, statusFilter]);
+
+  useEffect(() => {
+    loadBookings();
+  }, [loadBookings]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (!document.hidden) loadBookings().catch(() => undefined);
+    }, 60000);
+    return () => window.clearInterval(timer);
+  }, [loadBookings]);
+
+  const openStatusModal = (type: 'CONFIRMED' | 'REJECTED' | 'RESCHEDULED', booking: ManagedBooking) => {
+    setModalState({ type, booking });
+    setStatusForm({
+      confirmedDate: toDateInputValue(booking.confirmedDate || booking.preferredDate),
+      confirmedTime: booking.confirmedTime || booking.preferredTime,
+      rejectionReason: booking.rejectionReason || '',
+      rescheduledNote: booking.rescheduledNote || ''
+    });
+  };
+
+  const closeStatusModal = () => {
+    if (submitting) return;
+    setModalState({ type: null });
+  };
+
+  const updateStatus = async (bookingId: string, payload: Record<string, string>) => {
+    await api(`/api/admin/bookings/${bookingId}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload)
+    });
+    await loadBookings();
+  };
+
+  const submitStatusModal = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!modalState.type || !modalState.booking) return;
+    setSubmitting(true);
+    try {
+      if (modalState.type === 'CONFIRMED') {
+        await updateStatus(modalState.booking.id, {
+          status: 'CONFIRMED',
+          confirmedDate: statusForm.confirmedDate,
+          confirmedTime: statusForm.confirmedTime
+        });
+        showMessage('Đã xác nhận lịch hẹn');
+      } else if (modalState.type === 'REJECTED') {
+        await updateStatus(modalState.booking.id, {
+          status: 'REJECTED',
+          rejectionReason: statusForm.rejectionReason.trim()
+        });
+        showMessage('Đã từ chối lịch hẹn');
+      } else {
+        await updateStatus(modalState.booking.id, {
+          status: 'RESCHEDULED',
+          confirmedDate: statusForm.confirmedDate,
+          confirmedTime: statusForm.confirmedTime,
+          rescheduledNote: statusForm.rescheduledNote.trim()
+        });
+        showMessage('Đã dời lịch hẹn');
+      }
+      closeStatusModal();
+    } catch (err) {
+      showMessage(err instanceof Error ? err.message : 'Không thể cập nhật lịch hẹn', 'error');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const runQuickStatus = async (booking: ManagedBooking, status: 'COMPLETED' | 'CANCELLED') => {
+    try {
+      await updateStatus(booking.id, { status });
+      showMessage(status === 'COMPLETED' ? 'Đã hoàn thành lịch hẹn' : 'Đã hủy lịch hẹn');
+    } catch (err) {
+      showMessage(err instanceof Error ? err.message : 'Không thể cập nhật lịch hẹn', 'error');
+    }
+  };
+
+  const statItems = [
+    { label: 'Tổng lịch', value: summary.total.toLocaleString('vi-VN'), icon: CalendarDays, accent: 'blue' },
+    { label: 'Chờ xử lý', value: (summary.byStatus.PENDING || 0).toLocaleString('vi-VN'), icon: Clock, accent: 'orange' },
+    { label: 'Đã xác nhận', value: ((summary.byStatus.CONFIRMED || 0) + (summary.byStatus.RESCHEDULED || 0)).toLocaleString('vi-VN'), icon: CheckCircle, accent: 'green' },
+    { label: 'Đã từ chối/hủy', value: ((summary.byStatus.REJECTED || 0) + (summary.byStatus.CANCELLED || 0)).toLocaleString('vi-VN'), icon: Shield, accent: 'purple' }
+  ] as const;
+
+  return (
+    <div className="event-management-layout">
+      <section className="main-column">
+        <div className="stats-grid">
+          {statItems.map(stat => <StatCard key={stat.label} {...stat} />)}
+        </div>
+
+        <div className="toolbar glass-card">
+          <div className="search-box">
+            <Search size={20} />
+            <input value={search} onChange={event => setSearch(event.target.value)} placeholder="Tìm mã lịch, tên, số điện thoại, nội dung..." />
+          </div>
+          <div className="filter-group">
+            <ListFilter size={20} />
+            <Select value={statusFilter} onChange={setStatusFilter} ariaLabel="Lọc trạng thái lịch hẹn">
+              <option value="ALL">Tất cả trạng thái</option>
+              <option value="PENDING">Chờ xác nhận</option>
+              <option value="CONFIRMED">Đã xác nhận</option>
+              <option value="RESCHEDULED">Đã dời lịch</option>
+              <option value="REJECTED">Đã từ chối</option>
+              <option value="COMPLETED">Đã hoàn thành</option>
+              <option value="CANCELLED">Đã hủy</option>
+            </Select>
+          </div>
+          <button className="text-button" onClick={loadBookings} disabled={loading}><RefreshCw size={17} /> Làm mới</button>
+        </div>
+
+        <section className="table-card glass-card">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Tiếp dân</p>
+              <h2>Danh sách lịch hẹn</h2>
+            </div>
+          </div>
+
+          {bookings.length > 0 ? (
+            <>
+              <div className="question-table booking-table">
+                <div className="table-row table-head">
+                  <span>Lịch hẹn</span>
+                  <span>Người đặt</span>
+                  <span>Thời gian</span>
+                  <span>Trạng thái</span>
+                  <span>Thao tác</span>
+                </div>
+                {bookings.map(item => (
+                  <div className="table-row" key={item.id}>
+                    <div className="question-cell">
+                      <strong>{item.code} - {bookingFieldLabel(item.field)}</strong>
+                      <small>{item.description}</small>
+                    </div>
+                    <div className="booking-contact">
+                      <strong>{item.contactName || item.user?.displayName || 'Người đặt'}</strong>
+                      <span>{item.contactPhone || 'Chưa có SĐT'}</span>
+                    </div>
+                    <div className="booking-time">
+                      <span>Mong muốn: {formatBookingDate(item.preferredDate, item.preferredTime)}</span>
+                      {(item.confirmedDate || item.confirmedTime) && <strong>Xác nhận: {formatBookingDate(item.confirmedDate || item.preferredDate, item.confirmedTime || item.preferredTime)}</strong>}
+                    </div>
+                    <span className={`status-badge status-${item.status.toLowerCase()}`}>{bookingStatusLabel(item.status)}</span>
+                    <div className="row-actions">
+                      {item.status === 'PENDING' && <button className="icon-button" onClick={() => openStatusModal('CONFIRMED', item)} aria-label="Xác nhận"><CheckCircle size={18} /></button>}
+                      {item.status === 'PENDING' && <button className="icon-button" onClick={() => openStatusModal('RESCHEDULED', item)} aria-label="Dời lịch"><Clock size={18} /></button>}
+                      {item.status === 'PENDING' && <button className="icon-button danger" onClick={() => openStatusModal('REJECTED', item)} aria-label="Từ chối"><X size={18} /></button>}
+                      {['CONFIRMED', 'RESCHEDULED'].includes(item.status) && <button className="icon-button" onClick={() => runQuickStatus(item, 'COMPLETED')} aria-label="Hoàn thành"><CheckCircle size={18} /></button>}
+                      {['PENDING', 'CONFIRMED', 'RESCHEDULED'].includes(item.status) && <button className="icon-button danger" onClick={() => runQuickStatus(item, 'CANCELLED')} aria-label="Hủy"><Trash2 size={18} /></button>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="table-footer">
+                <span>Hiển thị {bookings.length} lịch hẹn</span>
+              </div>
+            </>
+          ) : <EmptyState title="Chưa có lịch hẹn" description="Các yêu cầu đặt lịch từ Mini App sẽ hiển thị tại đây." />}
+        </section>
+      </section>
+
+      <Modal
+        isOpen={modalState.type !== null}
+        onClose={closeStatusModal}
+        title={
+          modalState.type === 'CONFIRMED' ? 'Xác nhận lịch hẹn' :
+          modalState.type === 'REJECTED' ? 'Từ chối lịch hẹn' :
+          'Dời lịch hẹn'
+        }
+      >
+        <form className="stack-form" onSubmit={submitStatusModal}>
+          {modalState.type !== 'REJECTED' ? (
+            <>
+              <label>Ngày hẹn
+                <input required type="date" value={statusForm.confirmedDate} onChange={event => setStatusForm({ ...statusForm, confirmedDate: event.target.value })} />
+              </label>
+              <label>Giờ hẹn
+                <input required type="time" value={statusForm.confirmedTime} onChange={event => setStatusForm({ ...statusForm, confirmedTime: event.target.value })} />
+              </label>
+              {modalState.type === 'RESCHEDULED' && (
+                <label>Ghi chú dời lịch
+                  <textarea value={statusForm.rescheduledNote} onChange={event => setStatusForm({ ...statusForm, rescheduledNote: event.target.value })} />
+                </label>
+              )}
+            </>
+          ) : (
+            <label>Lý do từ chối
+              <textarea required value={statusForm.rejectionReason} onChange={event => setStatusForm({ ...statusForm, rejectionReason: event.target.value })} />
+            </label>
+          )}
+          <div className="modal-footer">
+            <button type="button" className="secondary-button" onClick={closeStatusModal}>Hủy</button>
+            <button type="submit" className="primary-button" disabled={submitting}>Lưu lại</button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

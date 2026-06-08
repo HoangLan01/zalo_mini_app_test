@@ -51,6 +51,7 @@ model Booking {
   confirmedTime   String?       @db.VarChar(5)
   description     String
   contactName     String        @db.VarChar(100)
+  contactPhone    String?       @db.VarChar(20)
   status          BookingStatus @default(PENDING)
   rejectionReason String?
   rescheduledNote String?

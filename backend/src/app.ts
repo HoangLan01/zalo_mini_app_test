@@ -3,6 +3,7 @@ import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import {
+  adminBookingRateLimiter,
   adminQuizRateLimiter,
   authRateLimiter,
   globalRateLimiter,
@@ -22,6 +23,7 @@ import quizRoutes from './routes/quiz.routes';
 import adminQuizRoutes from './routes/adminQuiz.routes';
 import eventsRoutes from './routes/events.routes';
 import adminEventsRoutes from './routes/adminEvents.routes';
+import adminBookingRoutes from './routes/adminBooking.routes';
 
 const app = express();
 
@@ -72,6 +74,7 @@ app.use('/api/quiz', publicQuizRateLimiter, quizRoutes);
 app.use('/api/events', publicQuizRateLimiter, eventsRoutes);
 app.use('/api/admin/quiz', adminQuizRateLimiter, adminQuizRoutes);
 app.use('/api/admin/events', adminQuizRateLimiter, adminEventsRoutes);
+app.use('/api/admin/bookings', adminBookingRateLimiter, adminBookingRoutes);
 
 // 8. 404 Handler
 app.use((req, res, next) => {
