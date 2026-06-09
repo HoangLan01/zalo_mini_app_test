@@ -14,7 +14,7 @@ export const upload = async (req: Request, res: Response, next: NextFunction) =>
       });
     }
 
-    if (purpose === 'event' && req.user?.role !== 'ADMIN') {
+    if (purpose === 'event' && !['ADMIN', 'SUPER_ADMIN'].includes(req.user?.role || '')) {
       return res.status(403).json({
         success: false,
         error: { code: 'FORBIDDEN', message: 'Bạn không có quyền tải ảnh sự kiện' }

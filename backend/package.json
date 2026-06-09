@@ -10,7 +10,8 @@
     "db:migrate": "npx prisma migrate dev",
     "db:generate": "npx prisma generate",
     "db:studio": "npx prisma studio",
-    "db:seed:quiz": "ts-node src/seedQuiz.ts"
+    "db:seed:quiz": "ts-node src/seedQuiz.ts",
+    "db:bootstrap-super-admin": "ts-node src/bootstrapSuperAdmin.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.x",

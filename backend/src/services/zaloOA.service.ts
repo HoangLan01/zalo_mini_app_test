@@ -8,6 +8,11 @@ import qs from 'qs';
 
 let cachedAccessToken: string | null = null;
 
+type BookingAdminAlert = Booking & {
+  contactName: string;
+  contactPhone?: string | null;
+};
+
 export const getOAToken = async (): Promise<string> => {
   try {
     let tokenRecord = await prisma.oAToken.findUnique({ where: { id: 'default' } });
@@ -232,6 +237,42 @@ DOI_LICH [ngày] [giờ] [ghi chú]`;
 
   if (!user.zaloId) return null;
   return sendMessageToUser(user.zaloId, { text: textContent });
+};
+
+export const sendBookingAdminAlert = async (booking: BookingAdminAlert, user: User): Promise<string | null> => {
+  const adminIds = (process.env.ZALO_BOOKING_ADMIN_USER_IDS || '')
+    .split(',')
+    .map(id => id.trim())
+    .filter(Boolean);
+
+  if (adminIds.length === 0) {
+    logger.warn('Missing ZALO_BOOKING_ADMIN_USER_IDS env var, cannot send booking admin alert');
+    return null;
+  }
+
+  const prefDate = booking.preferredDate.toISOString().split('T')[0].split('-').reverse().join('/');
+  const textContent =
+    `📅 YÊU CẦU ĐẶT LỊCH MỚI
+Mã: ${booking.code}
+👤 Người đặt: ${booking.contactName || user.displayName}
+☎️ SĐT: ${booking.contactPhone || 'Không có'}
+🗂️ Lĩnh vực: ${getFieldLabel(booking.field)}
+📆 Ngày mong muốn: ${prefDate}
+⏰ Giờ mong muốn: ${booking.preferredTime}
+📝 Nội dung: ${booking.description}
+
+Để xử lý nhanh, vui lòng mở trang admin hoặc reply tin nhắn này:
+XAC_NHAN [ngày] [giờ]
+TU_CHOI [lý do]
+DOI_LICH [ngày] [giờ] [ghi chú]`;
+
+  const messageIds = await Promise.all(adminIds.map(async adminId => {
+    const messageId = await sendMessageToUser(adminId, { text: textContent });
+    if (!messageId) logger.warn('Failed to send booking admin alert', { adminId, bookingId: booking.id });
+    return messageId;
+  }));
+
+  return messageIds.find(Boolean) || null;
 };
 
 export const sendLowRatingAlert = async (rating: Rating, user: User): Promise<void> => {

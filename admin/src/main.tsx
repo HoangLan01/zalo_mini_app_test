@@ -47,8 +47,12 @@ import Link from '@tiptap/extension-link';
 import Image from '@tiptap/extension-image';
 import './styles.css';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-const TOKEN_KEY = 'quiz_admin_token';
+const API_URL = import.meta.env.VITE_API_URL || (
+  import.meta.env.DEV
+    ? `${window.location.protocol}//${window.location.hostname}:3001`
+    : window.location.origin
+);
+const BOOKING_NOTIFICATION_READ_KEY = 'booking_notification_read_ids';
 
 type ApiResponse<T> = { success: true; data: T } | { success: false; error: { code: string; message: string } };
 type Topic = { id: string; title: string; slug: string; description?: string; order: number; isActive: boolean; _count?: { sets: number } };
@@ -75,6 +79,35 @@ type ManagedEvent = {
 type EventListResponse = {
   items: ManagedEvent[];
   pagination: { page: number; limit: number; total: number; totalPages: number };
+};
+type BookingStatus = 'PENDING' | 'CONFIRMED' | 'REJECTED' | 'RESCHEDULED' | 'COMPLETED' | 'CANCELLED';
+type BookingField = 'HO_TICH' | 'CU_TRU' | 'CHUNG_THUC' | 'DAT_DAI' | 'XA_HOI' | 'KHAC';
+type ManagedBooking = {
+  id: string;
+  code: string;
+  field: BookingField;
+  preferredDate: string;
+  preferredTime: string;
+  confirmedDate?: string | null;
+  confirmedTime?: string | null;
+  description: string;
+  contactName: string;
+  contactPhone?: string | null;
+  status: BookingStatus;
+  rejectionReason?: string | null;
+  rescheduledNote?: string | null;
+  createdAt: string;
+  updatedAt?: string;
+  user?: { id: string; displayName: string; avatarUrl?: string | null; zaloId?: string | null };
+};
+type BookingListResponse = {
+  items: ManagedBooking[];
+  pagination: { page: number; limit: number; total: number; totalPages: number };
+};
+type BookingSummary = {
+  total: number;
+  pendingCount: number;
+  byStatus: Partial<Record<BookingStatus, number>>;
 };
 type QuizSet = {
   id: string;
@@ -105,7 +138,23 @@ type Stats = {
   averageTimeTaken: number;
   leaderboard: Array<{ id: string; score: number; maxScore: number; timeTaken: number; user: { displayName: string } }>;
 };
-type ViewMode = 'dashboard' | 'bank' | 'create' | 'guide' | 'events' | 'news' | 'procedures' | 'users' | 'settings';
+type AdminUser = { id: string; displayName: string; email: string; role: 'ADMIN' | 'SUPER_ADMIN'; status: 'ACTIVE' | 'DISABLED'; mustChangePassword: boolean; lastLoginAt?: string | null };
+type ManagedAdmin = AdminUser & { createdAt: string; updatedAt: string; createdBy?: { displayName: string; email: string } | null };
+type AdminAuditLog = { id: string; action: string; entityType: string; entityId?: string | null; metadata?: unknown; ipAddress?: string | null; createdAt: string; actor: { displayName: string; email: string } };
+type ViewMode = 'dashboard' | 'bank' | 'create' | 'guide' | 'events' | 'bookings' | 'news' | 'procedures' | 'users' | 'admins' | 'settings';
+const VIEW_CONFIG: Record<ViewMode, { title: string; section: string; label: string }> = {
+  dashboard: { title: 'Tổng quan', section: 'Hệ thống', label: 'Tổng quan hệ thống' },
+  bank: { title: 'Ngân hàng câu hỏi', section: 'Kiến thức Chuyển đổi số', label: 'Quản lý câu hỏi' },
+  create: { title: 'Thêm câu hỏi mới', section: 'Kiến thức Chuyển đổi số', label: 'Thêm câu hỏi mới' },
+  guide: { title: 'Hướng dẫn sử dụng', section: 'Hệ thống', label: 'Hướng dẫn sử dụng' },
+  events: { title: 'Quản lý sự kiện', section: 'Quản lý nội dung', label: 'Sự kiện' },
+  bookings: { title: 'Quản lý lịch hẹn', section: 'Nghiệp vụ', label: 'Lịch hẹn' },
+  news: { title: 'Tin tức & Sự kiện', section: 'Quản lý nội dung', label: 'Tin tức & Sự kiện' },
+  procedures: { title: 'Thủ tục hành chính', section: 'Quản lý nội dung', label: 'Thủ tục hành chính' },
+  users: { title: 'Quản lý người dùng', section: 'Hệ thống', label: 'Người dùng' },
+  admins: { title: 'Quản trị viên', section: 'Hệ thống', label: 'Quản trị viên' },
+  settings: { title: 'Cài đặt hệ thống', section: 'Hệ thống', label: 'Cài đặt' }
+};
 type DashboardData = {
   summary: { totalUsers: number; totalTopics: number; totalSets: number; totalAttempts: number };
   dailyAttempts: { date: string; count: number }[];
@@ -168,32 +217,31 @@ const emptyEventForm = (): EventFormState => ({
 });
 
 async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = localStorage.getItem(TOKEN_KEY);
   const res = await fetch(`${API_URL}${path}`, {
     ...options,
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...options.headers
     }
   });
   const json = (await res.json()) as ApiResponse<T>;
   if (!res.ok || !json.success) {
+    if ((res.status === 401 || res.status === 403) && !path.includes('/admin/login')) {
+      window.dispatchEvent(new Event('admin-session-invalid'));
+    }
     throw new Error(json.success ? `HTTP ${res.status}` : json.error.message);
   }
   return json.data;
 }
 
 async function uploadEventImages(files: File[]): Promise<string[]> {
-  const token = localStorage.getItem(TOKEN_KEY);
   const formData = new FormData();
   files.forEach(file => formData.append('files', file));
 
   const res = await fetch(`${API_URL}/api/upload?purpose=event`, {
     method: 'POST',
-    headers: {
-      ...(token ? { Authorization: `Bearer ${token}` } : {})
-    },
+    credentials: 'include',
     body: formData
   });
   const json = (await res.json()) as ApiResponse<{ urls: string[] }>;
@@ -398,9 +446,11 @@ const getViewFromLocation = (): ViewMode => {
   if (v === 'guide') return 'guide';
   if (v === 'bank') return 'bank';
   if (v === 'events') return 'events';
+  if (v === 'bookings') return 'bookings';
   if (v === 'news') return 'news';
   if (v === 'procedures') return 'procedures';
   if (v === 'users') return 'users';
+  if (v === 'admins') return 'admins';
   if (v === 'settings') return 'settings';
   return 'dashboard';
 };
@@ -415,7 +465,21 @@ const buildViewUrl = (nextView: ViewMode) => {
   return `${url.pathname}${url.search}${url.hash}`;
 };
 
-function Login({ onLogin }: { onLogin: () => void }) {
+const loadReadBookingNotificationIds = () => {
+  try {
+    const raw = localStorage.getItem(BOOKING_NOTIFICATION_READ_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : [];
+  } catch {
+    return [];
+  }
+};
+
+const saveBookingNotificationIds = (ids: string[]) => {
+  localStorage.setItem(BOOKING_NOTIFICATION_READ_KEY, JSON.stringify(Array.from(new Set(ids))));
+};
+
+function Login({ onLogin }: { onLogin: (user: AdminUser) => void }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -424,12 +488,11 @@ function Login({ onLogin }: { onLogin: () => void }) {
     event.preventDefault();
     setError('');
     try {
-      const data = await api<{ token: string }>('/api/auth/admin/login', {
+      const data = await api<{ user: AdminUser }>('/api/auth/admin/login', {
         method: 'POST',
         body: JSON.stringify({ email, password })
       });
-      localStorage.setItem(TOKEN_KEY, data.token);
-      onLogin();
+      onLogin(data.user);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Không thể đăng nhập');
     }
@@ -461,13 +524,51 @@ function Login({ onLogin }: { onLogin: () => void }) {
   );
 }
 
-function App() {
-  const [loggedIn, setLoggedIn] = useState(Boolean(localStorage.getItem(TOKEN_KEY)));
-  if (!loggedIn) return <Login onLogin={() => setLoggedIn(true)} />;
-  return <Dashboard onLogout={() => { localStorage.removeItem(TOKEN_KEY); setLoggedIn(false); }} />;
+function ChangePassword({ onChanged }: { onChanged: () => void }) {
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [error, setError] = useState('');
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    try {
+      await api('/api/auth/admin/change-password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) });
+      onChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Không thể đổi mật khẩu');
+    }
+  };
+  return (
+    <main className="login-shell">
+      <form className="login-card glass-card" onSubmit={submit}>
+        <Shield size={40} />
+        <div><p className="eyebrow">Bảo mật tài khoản</p><h1>Đổi mật khẩu bắt buộc</h1></div>
+        <p className="muted">Mật khẩu mới cần ít nhất 12 ký tự, gồm chữ hoa, chữ thường, số và ký tự đặc biệt.</p>
+        <label>Mật khẩu hiện tại<input type="password" required value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} /></label>
+        <label>Mật khẩu mới<input type="password" required minLength={12} value={newPassword} onChange={e => setNewPassword(e.target.value)} /></label>
+        {error && <Notice tone="error" message={error} />}
+        <button className="primary-button" type="submit">Đổi mật khẩu</button>
+      </form>
+    </main>
+  );
 }
 
-function Dashboard({ onLogout }: { onLogout: () => void }) {
+function App() {
+  const [user, setUser] = useState<AdminUser | null>(null);
+  const [loadingSession, setLoadingSession] = useState(true);
+  const loadMe = useCallback(() => api<AdminUser>('/api/auth/admin/me').then(setUser), []);
+  useEffect(() => {
+    loadMe().catch(() => setUser(null)).finally(() => setLoadingSession(false));
+    const clear = () => setUser(null);
+    window.addEventListener('admin-session-invalid', clear);
+    return () => window.removeEventListener('admin-session-invalid', clear);
+  }, [loadMe]);
+  if (loadingSession) return <main className="login-shell"><div className="login-card glass-card">Đang kiểm tra phiên đăng nhập...</div></main>;
+  if (!user) return <Login onLogin={setUser} />;
+  if (user.mustChangePassword) return <ChangePassword onChanged={() => loadMe().catch(() => setUser(null))} />;
+  return <Dashboard user={user} onLogout={() => api('/api/auth/admin/logout', { method: 'POST' }).finally(() => setUser(null))} />;
+}
+
+function Dashboard({ user, onLogout }: { user: AdminUser; onLogout: () => void }) {
   const [view, setView] = useState<ViewMode>(() => getViewFromLocation());
   const [topics, setTopics] = useState<Topic[]>([]);
   const [sets, setSets] = useState<QuizSet[]>([]);
@@ -484,6 +585,9 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   const [stats, setStats] = useState<Stats | null>(null);
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [dashboardRange, setDashboardRange] = useState({ start: '', end: '' });
+  const [bookingSummary, setBookingSummary] = useState<BookingSummary>({ total: 0, pendingCount: 0, byStatus: {} });
+  const [bookingNotifications, setBookingNotifications] = useState<ManagedBooking[]>([]);
+  const [readBookingNotificationIds, setReadBookingNotificationIds] = useState<string[]>(() => loadReadBookingNotificationIds());
 
   const selectedSet = useMemo(() => sets.find(item => item.id === selectedSetId), [sets, selectedSetId]);
   const filteredSets = useMemo(
@@ -498,6 +602,11 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
       question.options.some(option => option.content.toLowerCase().includes(query))
     );
   }, [questionSearch, questions]);
+  const unreadBookingCount = useMemo(
+    () => bookingNotifications.filter(item => !readBookingNotificationIds.includes(item.id)).length,
+    [bookingNotifications, readBookingNotificationIds]
+  );
+  const isQuizView = ['bank', 'create'].includes(view);
 
   const dashboardStats = useMemo(() => {
     const totalQuestions = sets.reduce((sum, set) => sum + (set._count?.questions || 0), 0);
@@ -509,10 +618,40 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
     ] as const;
   }, [sets]);
 
-  const showMessage = (text: string, tone: 'info' | 'error' = 'info') => {
+  const showMessage = useCallback((text: string, tone: 'info' | 'error' = 'info') => {
     setMessage(text);
     setMessageTone(tone);
-  };
+  }, []);
+
+  const applyBookingSummary = useCallback((nextSummary: BookingSummary) => {
+    setBookingSummary(prev => {
+      const keys = new Set([...Object.keys(prev.byStatus), ...Object.keys(nextSummary.byStatus)]);
+      const sameStatusCounts = Array.from(keys).every(key =>
+        (prev.byStatus[key as BookingStatus] || 0) === (nextSummary.byStatus[key as BookingStatus] || 0)
+      );
+      if (prev.total === nextSummary.total && prev.pendingCount === nextSummary.pendingCount && sameStatusCounts) {
+        return prev;
+      }
+      return nextSummary;
+    });
+  }, []);
+
+  const applyBookingNotifications = useCallback((nextItems: ManagedBooking[]) => {
+    setBookingNotifications(prev => {
+      const prevSignature = prev.map(item => `${item.id}:${item.status}:${item.updatedAt || item.createdAt}`).join('|');
+      const nextSignature = nextItems.map(item => `${item.id}:${item.status}:${item.updatedAt || item.createdAt}`).join('|');
+      return prevSignature === nextSignature ? prev : nextItems;
+    });
+  }, []);
+
+  const markBookingNotificationRead = useCallback((bookingId: string) => {
+    setReadBookingNotificationIds(prev => {
+      if (prev.includes(bookingId)) return prev;
+      const next = [...prev, bookingId];
+      saveBookingNotificationIds(next);
+      return next;
+    });
+  }, []);
 
   const navigateView = useCallback((nextView: ViewMode, mode: NavigationMode = 'push') => {
     const nextUrl = buildViewUrl(nextView);
@@ -527,6 +666,10 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
     }
     setView(nextView);
   }, []);
+
+  useEffect(() => {
+    if (view === 'admins' && user.role !== 'SUPER_ADMIN') navigateView('dashboard', 'replace');
+  }, [navigateView, user.role, view]);
 
   const loadTopics = async () => {
     setTopics(await api<Topic[]>('/api/admin/quiz/topics'));
@@ -554,6 +697,16 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
     setStats(await api<Stats>(`/api/admin/quiz/sets/${setId}/stats`));
   };
 
+  const loadBookingSummary = useCallback(async () => {
+    const data = await api<BookingSummary>('/api/admin/bookings/summary');
+    applyBookingSummary(data);
+  }, [applyBookingSummary]);
+
+  const loadBookingNotifications = useCallback(async () => {
+    const data = await api<BookingListResponse>('/api/admin/bookings?status=PENDING&limit=10');
+    applyBookingNotifications(data.items);
+  }, [applyBookingNotifications]);
+
   const refreshAll = async () => {
     setLoading(true);
     try {
@@ -569,8 +722,21 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   };
 
   useEffect(() => {
-    refreshAll().catch(err => showMessage(err instanceof Error ? err.message : 'Không thể tải dữ liệu', 'error'));
-  }, []);
+    if (!isQuizView) return;
+    loadTopics().catch(err => showMessage(err instanceof Error ? err.message : 'Không thể tải dữ liệu', 'error'));
+  }, [isQuizView]);
+
+  useEffect(() => {
+    const loadBookingHeader = () => view === 'bookings'
+      ? loadBookingNotifications()
+      : Promise.all([loadBookingSummary(), loadBookingNotifications()]);
+
+    loadBookingHeader().catch(err => showMessage(err instanceof Error ? err.message : 'Khong the tai thong bao lich hen', 'error'));
+    const timer = window.setInterval(() => {
+      if (!document.hidden) loadBookingHeader().catch(() => undefined);
+    }, 60000);
+    return () => window.clearInterval(timer);
+  }, [loadBookingNotifications, loadBookingSummary, showMessage, view]);
 
   useEffect(() => {
     if (view === 'dashboard') {
@@ -594,8 +760,9 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   }, []);
 
   useEffect(() => {
+    if (!isQuizView) return;
     loadSets(selectedTopicId).catch(err => showMessage(err instanceof Error ? err.message : 'Không thể tải bộ câu hỏi', 'error'));
-  }, [selectedTopicId]);
+  }, [isQuizView, selectedTopicId]);
 
   useEffect(() => {
     const nextSetId = filteredSets.some(set => set.id === selectedSetId) ? selectedSetId : filteredSets[0]?.id || '';
@@ -603,9 +770,10 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   }, [filteredSets, selectedSetId]);
 
   useEffect(() => {
+    if (!isQuizView) return;
     loadQuestions(selectedSetId).catch(err => showMessage(err instanceof Error ? err.message : 'Không thể tải câu hỏi', 'error'));
     loadStats(selectedSetId).catch(err => showMessage(err instanceof Error ? err.message : 'Không thể tải thống kê', 'error'));
-  }, [selectedSetId]);
+  }, [isQuizView, selectedSetId]);
 
   const action = async (fn: () => Promise<unknown>, successMessage?: string) => {
     setMessage('');
@@ -682,14 +850,19 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
 
   return (
     <AdminShell
+      user={user}
       view={view}
       onNavigate={navigateView}
       onLogout={onLogout}
       onCreateQuestion={startCreateQuestion}
-      onSaveQuestion={undefined}
       onCloneClick={() => openModal('SET_CLONE')}
       onCloseClick={() => openModal('SET_CLOSE')}
       onPublishClick={() => openModal('SET_PUBLISH')}
+      pendingBookingCount={unreadBookingCount}
+      bookingNotifications={bookingNotifications}
+      readBookingNotificationIds={readBookingNotificationIds}
+      onBookingNotificationRead={markBookingNotificationRead}
+      onReloadBookingNotifications={loadBookingNotifications}
     >
       {message && <Notice tone={messageTone} message={message} onClose={() => setMessage('')} />}
       
@@ -756,6 +929,10 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
         />
       ) : view === 'events' ? (
         <EventManagementView showMessage={showMessage} />
+      ) : view === 'bookings' ? (
+        <BookingManagementView showMessage={showMessage} onSummaryChange={applyBookingSummary} />
+      ) : view === 'admins' && user.role === 'SUPER_ADMIN' ? (
+        <AdminManagementView currentUser={user} showMessage={showMessage} />
       ) : ['news', 'procedures', 'users', 'settings'].includes(view) ? (
         <ComingSoonView view={view} />
       ) : view === 'bank' ? (
@@ -803,30 +980,66 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
 
 function AdminShell({
   children,
+  user,
   view,
   onNavigate,
   onLogout,
   onCreateQuestion,
-  onSaveQuestion,
   onCloneClick,
   onCloseClick,
-  onPublishClick
+  onPublishClick,
+  pendingBookingCount,
+  bookingNotifications,
+  readBookingNotificationIds,
+  onBookingNotificationRead,
+  onReloadBookingNotifications
 }: {
   children: React.ReactNode;
+  user: AdminUser;
   view: ViewMode;
   onNavigate: (view: ViewMode, mode?: NavigationMode) => void;
   onLogout: () => void;
   onCreateQuestion: () => void;
-  onSaveQuestion?: () => void;
   onCloneClick?: () => void;
   onCloseClick?: () => void;
   onPublishClick?: () => void;
+  pendingBookingCount: number;
+  bookingNotifications: ManagedBooking[];
+  readBookingNotificationIds: string[];
+  onBookingNotificationRead: (bookingId: string) => void;
+  onReloadBookingNotifications: () => Promise<void>;
 }) {
-  const pageTitle = view === 'dashboard' ? 'Tổng quan' :
-    view === 'bank' ? 'Ngân hàng câu hỏi' :
-    view === 'events' ? 'Quản lý sự kiện' :
-    view === 'guide' ? 'Hướng dẫn sử dụng' :
-    'Thêm câu hỏi mới';
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const notificationButtonRef = useRef<HTMLButtonElement | null>(null);
+  const notificationPopoverRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!isNotificationOpen) return;
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (!notificationButtonRef.current?.contains(target) && !notificationPopoverRef.current?.contains(target)) {
+        setIsNotificationOpen(false);
+      }
+    };
+    window.addEventListener('mousedown', handlePointerDown);
+    return () => window.removeEventListener('mousedown', handlePointerDown);
+  }, [isNotificationOpen]);
+
+  const unreadNotifications = bookingNotifications.filter(item => !readBookingNotificationIds.includes(item.id));
+  const readNotifications = bookingNotifications.filter(item => readBookingNotificationIds.includes(item.id));
+  const orderedNotifications = [...unreadNotifications, ...readNotifications];
+
+  const openNotifications = () => {
+    setIsNotificationOpen(open => !open);
+    onReloadBookingNotifications().catch(() => undefined);
+  };
+
+  const selectNotification = (bookingId: string) => {
+    onBookingNotificationRead(bookingId);
+    setIsNotificationOpen(false);
+    onNavigate('bookings');
+  };
+  const viewConfig = VIEW_CONFIG[view];
   return (
     <main className="admin-layout">
       <aside className="sidebar">
@@ -852,6 +1065,9 @@ function AdminShell({
           <button className={view === 'events' ? 'nav-item active' : 'nav-item'} onClick={() => onNavigate('events')}>
             <CalendarDays size={20} /> Sự kiện
           </button>
+          <button className={view === 'bookings' ? 'nav-item active' : 'nav-item'} onClick={() => onNavigate('bookings')}>
+            <Clock size={20} /> Lịch hẹn
+          </button>
           <button className={view === 'procedures' ? 'nav-item active' : 'nav-item'} onClick={() => onNavigate('procedures')}>
             <ClipboardList size={20} /> Thủ tục hành chính
           </button>
@@ -862,16 +1078,21 @@ function AdminShell({
           <button className={view === 'users' ? 'nav-item active' : 'nav-item'} onClick={() => onNavigate('users')}>
             <Award size={20} /> Người dùng
           </button>
+          {user.role === 'SUPER_ADMIN' && (
+            <button className={view === 'admins' ? 'nav-item active' : 'nav-item'} onClick={() => onNavigate('admins')}>
+              <Shield size={20} /> Quản trị viên
+            </button>
+          )}
           <button className={view === 'settings' ? 'nav-item active' : 'nav-item'} onClick={() => onNavigate('settings')}>
             <Settings size={20} /> Cài đặt
           </button>
         </nav>
 
         <div className="sidebar-user">
-          <div className="avatar">NA</div>
+          <div className="avatar">{user.displayName.slice(0, 2).toUpperCase()}</div>
           <div className="user-info">
-            <strong>Nguyễn Văn An</strong>
-            <span>Quản trị viên</span>
+            <strong>{user.displayName}</strong>
+            <span>{user.role === 'SUPER_ADMIN' ? 'Super Admin' : 'Admin'}</span>
           </div>
           <button className="logout-button" onClick={onLogout} title="Đăng xuất">
             <LogOut size={18} />
@@ -884,28 +1105,70 @@ function AdminShell({
           <div>
             <div className="breadcrumb">
               {view === 'dashboard' ? (
-                <strong>Tổng quan hệ thống</strong>
-              ) : ['events', 'news', 'procedures', 'users', 'settings'].includes(view) ? (
-               <button className="primary-button" onClick={() => onNavigate('dashboard')}>Về trang chủ</button>
-             ) : (
+                <strong>{viewConfig.label}</strong>
+              ) : view === 'bank' || view === 'create' ? (
                 <>
-                  <span>Kiến thức Chuyển đổi số</span>
+                  <button onClick={() => onNavigate('dashboard')}>Tổng quan</button>
                   <span>/</span>
                   <button onClick={() => onNavigate('bank')}>Quản lý câu hỏi</button>
-                  {view === 'guide' && <><span>/</span><strong>Hướng dẫn sử dụng</strong></>}
-                  {view === 'news' && <><span>/</span><strong>Tin tức & Sự kiện</strong></>}
-                  {view === 'events' && <><span>/</span><strong>Quản lý sự kiện</strong></>}
-                  {view === 'procedures' && <><span>/</span><strong>Thủ tục hành chính</strong></>}
-                  {view === 'users' && <><span>/</span><strong>Quản lý người dùng</strong></>}
-                  {view === 'settings' && <><span>/</span><strong>Cài đặt hệ thống</strong></>}
                   {view === 'create' && <><span>/</span><strong>Thêm câu hỏi mới</strong></>}
+                </>
+              ) : (
+                <>
+                  <button onClick={() => onNavigate('dashboard')}>Tổng quan</button>
+                  <span>/</span>
+                  <span>{viewConfig.section}</span>
+                  <span>/</span>
+                  <strong>{viewConfig.label}</strong>
                 </>
               )}
             </div>
-            <h1>{pageTitle}</h1>
+            <h1>{viewConfig.title}</h1>
           </div>
           <div className="topbar-actions">
-            <button className="icon-button notify" aria-label="Thông báo"><Bell size={21} /></button>
+            <button
+              ref={notificationButtonRef}
+              className={pendingBookingCount > 0 ? 'icon-button notify has-alert' : 'icon-button notify'}
+              aria-label="Thông báo lịch hẹn"
+              aria-expanded={isNotificationOpen}
+              onClick={openNotifications}
+              title="Lịch hẹn chờ xử lý"
+            >
+              <Bell size={21} />
+              {pendingBookingCount > 0 && <span className="notify-badge">{pendingBookingCount > 99 ? '99+' : pendingBookingCount}</span>}
+            </button>
+            {isNotificationOpen && (
+              <div className="notification-popover" role="dialog" aria-label="Thông báo lịch hẹn" ref={notificationPopoverRef}>
+                <div className="notification-popover-header">
+                  <strong>Thông báo lịch hẹn</strong>
+                  <span>{pendingBookingCount} chưa xem</span>
+                </div>
+                {orderedNotifications.length > 0 ? (
+                  <div className="notification-list">
+                    {orderedNotifications.map(item => {
+                      const isRead = readBookingNotificationIds.includes(item.id);
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          className={isRead ? 'notification-item read' : 'notification-item unread'}
+                          onClick={() => selectNotification(item.id)}
+                        >
+                          <span className="notification-dot" aria-hidden="true" />
+                          <span className="notification-body">
+                            <strong>{item.code} - {item.contactName || item.user?.displayName || 'Người đặt'}</strong>
+                            <small>{bookingFieldLabel(item.field)} · {formatBookingDate(item.preferredDate, item.preferredTime)}</small>
+                            <em>{isRead ? 'Đã xem' : 'Chưa xem'}</em>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="notification-empty">Chưa có lịch hẹn chờ xử lý</div>
+                )}
+              </div>
+            )}
             {view === 'dashboard' ? (
               null
             ) : view === 'bank' ? (
@@ -915,16 +1178,7 @@ function AdminShell({
                 <button className="primary-button strong" onClick={onPublishClick}>Xuất bản</button>
                 <button className="primary-button" onClick={onCreateQuestion}><Plus size={20} /> Thêm câu hỏi</button>
               </>
-            ) : view === 'guide' ? (
-              <button className="primary-button" onClick={() => onNavigate('bank')}>Quay lại quản lý</button>
-            ) : view === 'events' ? (
-              null
-            ) : (
-              <>
-                <button className="secondary-button" onClick={() => onNavigate('bank', 'replace')}>Hủy</button>
-                <button className="primary-button" onClick={onSaveQuestion}><Save size={19} /> Lưu câu hỏi</button>
-              </>
-            )}
+            ) : null}
           </div>
         </header>
         <div className="content-shell">{children}</div>
@@ -1260,6 +1514,285 @@ function SetEditorView({
         <button className="secondary-button" onClick={onCancel}><X size={18} /> Hủy</button>
         <button className="primary-button" onClick={() => onSave(questions, deletedIds)}><Save size={18} /> Lưu tất cả thay đổi</button>
       </footer>
+    </div>
+  );
+}
+
+const bookingFieldLabel = (field: BookingField) => {
+  const labels: Record<BookingField, string> = {
+    HO_TICH: 'Hộ tịch',
+    CU_TRU: 'Cư trú',
+    CHUNG_THUC: 'Chứng thực',
+    DAT_DAI: 'Đất đai - Xây dựng',
+    XA_HOI: 'Chính sách xã hội',
+    KHAC: 'Vấn đề khác'
+  };
+  return labels[field] || field;
+};
+
+const bookingStatusLabel = (status: BookingStatus) => {
+  const labels: Record<BookingStatus, string> = {
+    PENDING: 'Chờ xác nhận',
+    CONFIRMED: 'Đã xác nhận',
+    REJECTED: 'Đã từ chối',
+    RESCHEDULED: 'Đã dời lịch',
+    COMPLETED: 'Đã hoàn thành',
+    CANCELLED: 'Đã hủy'
+  };
+  return labels[status] || status;
+};
+
+const toDateInputValue = (value?: string | null) => {
+  if (!value) return '';
+  return new Date(value).toISOString().slice(0, 10);
+};
+
+const formatBookingDate = (date: string, time?: string | null) => {
+  const formatted = new Intl.DateTimeFormat('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
+  }).format(new Date(date));
+  return time ? `${formatted} - ${time}` : formatted;
+};
+
+function BookingManagementView({
+  showMessage,
+  onSummaryChange
+}: {
+  showMessage: (text: string, tone?: 'info' | 'error') => void;
+  onSummaryChange: (summary: BookingSummary) => void;
+}) {
+  const [bookings, setBookings] = useState<ManagedBooking[]>([]);
+  const [summary, setSummary] = useState<BookingSummary>({ total: 0, pendingCount: 0, byStatus: {} });
+  const [statusFilter, setStatusFilter] = useState('PENDING');
+  const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [modalState, setModalState] = useState<{ type: 'CONFIRMED' | 'REJECTED' | 'RESCHEDULED' | null; booking?: ManagedBooking }>({ type: null });
+  const [statusForm, setStatusForm] = useState({ confirmedDate: '', confirmedTime: '', rejectionReason: '', rescheduledNote: '' });
+
+  const loadSummary = useCallback(async () => {
+    const data = await api<BookingSummary>('/api/admin/bookings/summary');
+    setSummary(data);
+    onSummaryChange(data);
+  }, [onSummaryChange]);
+
+  const loadBookings = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (statusFilter !== 'ALL') params.set('status', statusFilter);
+      if (search.trim()) params.set('search', search.trim());
+      params.set('limit', '50');
+      const data = await api<BookingListResponse>(`/api/admin/bookings?${params.toString()}`);
+      setBookings(data.items);
+      await loadSummary();
+    } catch (err) {
+      showMessage(err instanceof Error ? err.message : 'Không thể tải lịch hẹn', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [loadSummary, search, showMessage, statusFilter]);
+
+  useEffect(() => {
+    loadBookings();
+  }, [loadBookings]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (!document.hidden) loadBookings().catch(() => undefined);
+    }, 60000);
+    return () => window.clearInterval(timer);
+  }, [loadBookings]);
+
+  const openStatusModal = (type: 'CONFIRMED' | 'REJECTED' | 'RESCHEDULED', booking: ManagedBooking) => {
+    setModalState({ type, booking });
+    setStatusForm({
+      confirmedDate: toDateInputValue(booking.confirmedDate || booking.preferredDate),
+      confirmedTime: booking.confirmedTime || booking.preferredTime,
+      rejectionReason: booking.rejectionReason || '',
+      rescheduledNote: booking.rescheduledNote || ''
+    });
+  };
+
+  const closeStatusModal = () => {
+    if (submitting) return;
+    setModalState({ type: null });
+  };
+
+  const updateStatus = async (bookingId: string, payload: Record<string, string>) => {
+    await api(`/api/admin/bookings/${bookingId}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload)
+    });
+    await loadBookings();
+  };
+
+  const submitStatusModal = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!modalState.type || !modalState.booking) return;
+    setSubmitting(true);
+    try {
+      if (modalState.type === 'CONFIRMED') {
+        await updateStatus(modalState.booking.id, {
+          status: 'CONFIRMED',
+          confirmedDate: statusForm.confirmedDate,
+          confirmedTime: statusForm.confirmedTime
+        });
+        showMessage('Đã xác nhận lịch hẹn');
+      } else if (modalState.type === 'REJECTED') {
+        await updateStatus(modalState.booking.id, {
+          status: 'REJECTED',
+          rejectionReason: statusForm.rejectionReason.trim()
+        });
+        showMessage('Đã từ chối lịch hẹn');
+      } else {
+        await updateStatus(modalState.booking.id, {
+          status: 'RESCHEDULED',
+          confirmedDate: statusForm.confirmedDate,
+          confirmedTime: statusForm.confirmedTime,
+          rescheduledNote: statusForm.rescheduledNote.trim()
+        });
+        showMessage('Đã dời lịch hẹn');
+      }
+      closeStatusModal();
+    } catch (err) {
+      showMessage(err instanceof Error ? err.message : 'Không thể cập nhật lịch hẹn', 'error');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const runQuickStatus = async (booking: ManagedBooking, status: 'COMPLETED' | 'CANCELLED') => {
+    try {
+      await updateStatus(booking.id, { status });
+      showMessage(status === 'COMPLETED' ? 'Đã hoàn thành lịch hẹn' : 'Đã hủy lịch hẹn');
+    } catch (err) {
+      showMessage(err instanceof Error ? err.message : 'Không thể cập nhật lịch hẹn', 'error');
+    }
+  };
+
+  const statItems = [
+    { label: 'Tổng lịch', value: summary.total.toLocaleString('vi-VN'), icon: CalendarDays, accent: 'blue' },
+    { label: 'Chờ xử lý', value: (summary.byStatus.PENDING || 0).toLocaleString('vi-VN'), icon: Clock, accent: 'orange' },
+    { label: 'Đã xác nhận', value: ((summary.byStatus.CONFIRMED || 0) + (summary.byStatus.RESCHEDULED || 0)).toLocaleString('vi-VN'), icon: CheckCircle, accent: 'green' },
+    { label: 'Đã từ chối/hủy', value: ((summary.byStatus.REJECTED || 0) + (summary.byStatus.CANCELLED || 0)).toLocaleString('vi-VN'), icon: Shield, accent: 'purple' }
+  ] as const;
+
+  return (
+    <div className="event-management-layout">
+      <section className="main-column">
+        <div className="stats-grid">
+          {statItems.map(stat => <StatCard key={stat.label} {...stat} />)}
+        </div>
+
+        <div className="toolbar glass-card">
+          <div className="search-box">
+            <Search size={20} />
+            <input value={search} onChange={event => setSearch(event.target.value)} placeholder="Tìm mã lịch, tên, số điện thoại, nội dung..." />
+          </div>
+          <div className="filter-group">
+            <ListFilter size={20} />
+            <Select value={statusFilter} onChange={setStatusFilter} ariaLabel="Lọc trạng thái lịch hẹn">
+              <option value="ALL">Tất cả trạng thái</option>
+              <option value="PENDING">Chờ xác nhận</option>
+              <option value="CONFIRMED">Đã xác nhận</option>
+              <option value="RESCHEDULED">Đã dời lịch</option>
+              <option value="REJECTED">Đã từ chối</option>
+              <option value="COMPLETED">Đã hoàn thành</option>
+              <option value="CANCELLED">Đã hủy</option>
+            </Select>
+          </div>
+          <button className="text-button" onClick={loadBookings} disabled={loading}><RefreshCw size={17} /> Làm mới</button>
+        </div>
+
+        <section className="table-card glass-card">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Tiếp dân</p>
+              <h2>Danh sách lịch hẹn</h2>
+            </div>
+          </div>
+
+          {bookings.length > 0 ? (
+            <>
+              <div className="question-table booking-table">
+                <div className="table-row table-head">
+                  <span>Lịch hẹn</span>
+                  <span>Người đặt</span>
+                  <span>Thời gian</span>
+                  <span>Trạng thái</span>
+                  <span>Thao tác</span>
+                </div>
+                {bookings.map(item => (
+                  <div className="table-row" key={item.id}>
+                    <div className="question-cell">
+                      <strong>{item.code} - {bookingFieldLabel(item.field)}</strong>
+                      <small>{item.description}</small>
+                    </div>
+                    <div className="booking-contact">
+                      <strong>{item.contactName || item.user?.displayName || 'Người đặt'}</strong>
+                      <span>{item.contactPhone || 'Chưa có SĐT'}</span>
+                    </div>
+                    <div className="booking-time">
+                      <span>Mong muốn: {formatBookingDate(item.preferredDate, item.preferredTime)}</span>
+                      {(item.confirmedDate || item.confirmedTime) && <strong>Xác nhận: {formatBookingDate(item.confirmedDate || item.preferredDate, item.confirmedTime || item.preferredTime)}</strong>}
+                    </div>
+                    <span className={`status-badge status-${item.status.toLowerCase()}`}>{bookingStatusLabel(item.status)}</span>
+                    <div className="row-actions">
+                      {item.status === 'PENDING' && <button className="icon-button" onClick={() => openStatusModal('CONFIRMED', item)} aria-label="Xác nhận"><CheckCircle size={18} /></button>}
+                      {item.status === 'PENDING' && <button className="icon-button" onClick={() => openStatusModal('RESCHEDULED', item)} aria-label="Dời lịch"><Clock size={18} /></button>}
+                      {item.status === 'PENDING' && <button className="icon-button danger" onClick={() => openStatusModal('REJECTED', item)} aria-label="Từ chối"><X size={18} /></button>}
+                      {['CONFIRMED', 'RESCHEDULED'].includes(item.status) && <button className="icon-button" onClick={() => runQuickStatus(item, 'COMPLETED')} aria-label="Hoàn thành"><CheckCircle size={18} /></button>}
+                      {['PENDING', 'CONFIRMED', 'RESCHEDULED'].includes(item.status) && <button className="icon-button danger" onClick={() => runQuickStatus(item, 'CANCELLED')} aria-label="Hủy"><Trash2 size={18} /></button>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="table-footer">
+                <span>Hiển thị {bookings.length} lịch hẹn</span>
+              </div>
+            </>
+          ) : <EmptyState title="Chưa có lịch hẹn" description="Các yêu cầu đặt lịch từ Mini App sẽ hiển thị tại đây." />}
+        </section>
+      </section>
+
+      <Modal
+        isOpen={modalState.type !== null}
+        onClose={closeStatusModal}
+        title={
+          modalState.type === 'CONFIRMED' ? 'Xác nhận lịch hẹn' :
+          modalState.type === 'REJECTED' ? 'Từ chối lịch hẹn' :
+          'Dời lịch hẹn'
+        }
+      >
+        <form className="stack-form" onSubmit={submitStatusModal}>
+          {modalState.type !== 'REJECTED' ? (
+            <>
+              <label>Ngày hẹn
+                <input required type="date" value={statusForm.confirmedDate} onChange={event => setStatusForm({ ...statusForm, confirmedDate: event.target.value })} />
+              </label>
+              <label>Giờ hẹn
+                <input required type="time" value={statusForm.confirmedTime} onChange={event => setStatusForm({ ...statusForm, confirmedTime: event.target.value })} />
+              </label>
+              {modalState.type === 'RESCHEDULED' && (
+                <label>Ghi chú dời lịch
+                  <textarea value={statusForm.rescheduledNote} onChange={event => setStatusForm({ ...statusForm, rescheduledNote: event.target.value })} />
+                </label>
+              )}
+            </>
+          ) : (
+            <label>Lý do từ chối
+              <textarea required value={statusForm.rejectionReason} onChange={event => setStatusForm({ ...statusForm, rejectionReason: event.target.value })} />
+            </label>
+          )}
+          <div className="modal-footer">
+            <button type="button" className="secondary-button" onClick={closeStatusModal}>Hủy</button>
+            <button type="submit" className="primary-button" disabled={submitting}>Lưu lại</button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }
@@ -1866,6 +2399,102 @@ function DashboardView({ data, range, onRangeChange }: {
           ) : <p className="muted" style={{ padding: '16px 0' }}>Chưa có hoạt động nào.</p>}
         </section>
       </div>
+    </div>
+  );
+}
+
+function AdminManagementView({ currentUser, showMessage }: { currentUser: AdminUser; showMessage: (text: string, tone?: 'info' | 'error') => void }) {
+  const [tab, setTab] = useState<'accounts' | 'audit'>('accounts');
+  const [accounts, setAccounts] = useState<ManagedAdmin[]>([]);
+  const [logs, setLogs] = useState<AdminAuditLog[]>([]);
+  const [search, setSearch] = useState('');
+  const [role, setRole] = useState('ALL');
+  const [status, setStatus] = useState('ALL');
+  const [temporaryPassword, setTemporaryPassword] = useState('');
+  const [form, setForm] = useState({ displayName: '', email: '', role: 'ADMIN' as 'ADMIN' | 'SUPER_ADMIN' });
+
+  const loadAccounts = useCallback(async () => {
+    const params = new URLSearchParams();
+    if (search) params.set('search', search);
+    if (role !== 'ALL') params.set('role', role);
+    if (status !== 'ALL') params.set('status', status);
+    const data = await api<{ items: ManagedAdmin[] }>(`/api/admin/accounts?${params}`);
+    setAccounts(data.items);
+  }, [role, search, status]);
+  const loadLogs = useCallback(async () => {
+    const data = await api<{ items: AdminAuditLog[] }>('/api/admin/audit-logs?limit=50');
+    setLogs(data.items);
+  }, []);
+  useEffect(() => { (tab === 'accounts' ? loadAccounts() : loadLogs()).catch(err => showMessage(err.message, 'error')); }, [tab, loadAccounts, loadLogs, showMessage]);
+
+  const run = async (fn: () => Promise<unknown>, message: string) => {
+    try { await fn(); await loadAccounts(); showMessage(message); } catch (err) { showMessage(err instanceof Error ? err.message : 'Thao tác thất bại', 'error'); }
+  };
+  const create = async (event: React.FormEvent) => {
+    event.preventDefault();
+    try {
+      const data = await api<{ temporaryPassword: string }>('/api/admin/accounts', { method: 'POST', body: JSON.stringify(form) });
+      setTemporaryPassword(data.temporaryPassword);
+      setForm({ displayName: '', email: '', role: 'ADMIN' });
+      await loadAccounts();
+    } catch (err) { showMessage(err instanceof Error ? err.message : 'Không thể tạo tài khoản', 'error'); }
+  };
+  const edit = async (account: ManagedAdmin) => {
+    const displayName = window.prompt('Tên hiển thị', account.displayName);
+    if (displayName === null) return;
+    const email = window.prompt('Email', account.email);
+    if (email === null) return;
+    const nextRole = window.prompt('Role: ADMIN hoặc SUPER_ADMIN', account.role);
+    if (nextRole !== 'ADMIN' && nextRole !== 'SUPER_ADMIN') return showMessage('Role không hợp lệ', 'error');
+    await run(() => api(`/api/admin/accounts/${account.id}`, { method: 'PATCH', body: JSON.stringify({ displayName, email, role: nextRole }) }), 'Đã cập nhật tài khoản');
+  };
+  const resetPassword = async (account: ManagedAdmin) => {
+    try {
+      const data = await api<{ temporaryPassword: string }>(`/api/admin/accounts/${account.id}/reset-password`, { method: 'POST' });
+      setTemporaryPassword(data.temporaryPassword);
+      await loadAccounts();
+    } catch (err) { showMessage(err instanceof Error ? err.message : 'Không thể reset mật khẩu', 'error'); }
+  };
+
+  return (
+    <div className="event-management-layout">
+      <div className="toolbar glass-card">
+        <button className={tab === 'accounts' ? 'primary-button compact' : 'secondary-button compact'} onClick={() => setTab('accounts')}>Tài khoản</button>
+        <button className={tab === 'audit' ? 'primary-button compact' : 'secondary-button compact'} onClick={() => setTab('audit')}>Nhật ký hoạt động</button>
+      </div>
+      {temporaryPassword && <section className="notice info"><span>Mật khẩu tạm thời, chỉ hiển thị lần này: <strong>{temporaryPassword}</strong></span><button onClick={() => setTemporaryPassword('')}>Đóng</button></section>}
+      {tab === 'accounts' ? <>
+        <form className="glass-card form-card admin-create-form" onSubmit={create}>
+          <div className="section-heading tight"><div><p className="eyebrow">SUPER_ADMIN</p><h2>Tạo tài khoản quản trị</h2></div></div>
+          <input required placeholder="Tên hiển thị" value={form.displayName} onChange={e => setForm({ ...form, displayName: e.target.value })} />
+          <input required type="email" placeholder="Email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
+          <Select value={form.role} onChange={value => setForm({ ...form, role: value as 'ADMIN' | 'SUPER_ADMIN' })} ariaLabel="Vai trò"><option value="ADMIN">ADMIN</option><option value="SUPER_ADMIN">SUPER_ADMIN</option></Select>
+          <button className="primary-button" type="submit"><Plus size={18} /> Tạo tài khoản</button>
+        </form>
+        <section className="glass-card table-card">
+          <div className="toolbar">
+            <div className="search-box"><Search size={18} /><input placeholder="Tìm tên hoặc email" value={search} onChange={e => setSearch(e.target.value)} /></div>
+            <Select value={role} onChange={setRole} ariaLabel="Lọc role"><option value="ALL">Mọi role</option><option value="ADMIN">ADMIN</option><option value="SUPER_ADMIN">SUPER_ADMIN</option></Select>
+            <Select value={status} onChange={setStatus} ariaLabel="Lọc trạng thái"><option value="ALL">Mọi trạng thái</option><option value="ACTIVE">ACTIVE</option><option value="DISABLED">DISABLED</option></Select>
+          </div>
+          <div className="admin-account-list">
+            {accounts.map(account => <div className="admin-account-row" key={account.id}>
+              <div className="question-cell"><strong>{account.displayName}</strong><small>{account.email}</small></div>
+              <span className="chip">{account.role}</span>
+              <span className={`status-badge ${account.status === 'ACTIVE' ? 'status-published' : 'status-closed'}`}>{account.status}</span>
+              <small>{account.lastLoginAt ? formatDateTime(account.lastLoginAt) : 'Chưa đăng nhập'}</small>
+              <div className="row-actions">
+                <button className="icon-button" title="Sửa" onClick={() => edit(account)}><Edit size={16} /></button>
+                <button className="secondary-button compact" onClick={() => resetPassword(account)}>Reset mật khẩu</button>
+                <button disabled={account.id === currentUser.id} className="secondary-button compact" onClick={() => run(() => api(`/api/admin/accounts/${account.id}/${account.status === 'ACTIVE' ? 'disable' : 'enable'}`, { method: 'POST' }), account.status === 'ACTIVE' ? 'Đã khóa tài khoản' : 'Đã mở khóa tài khoản')}>{account.status === 'ACTIVE' ? 'Khóa' : 'Mở khóa'}</button>
+              </div>
+            </div>)}
+          </div>
+        </section>
+      </> : <section className="glass-card table-card">
+        <div className="section-heading tight"><div><p className="eyebrow">Audit</p><h2>Hoạt động gần đây</h2></div></div>
+        <div className="admin-audit-list">{logs.map(log => <div className="admin-audit-row" key={log.id}><div><strong>{log.action}</strong><small>{log.entityType}{log.entityId ? ` · ${log.entityId}` : ''}</small></div><div><strong>{log.actor.displayName}</strong><small>{log.actor.email}</small></div><span>{formatDateTime(log.createdAt)}</span></div>)}</div>
+      </section>}
     </div>
   );
 }

@@ -10,10 +10,11 @@ const router = Router();
 
 const createBookingSchema = z.object({
   field: z.nativeEnum(BookingField),
-  preferredDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Sai định dạng YYYY-MM-DD'),
-  preferredTime: z.string().regex(/^\d{2}:\d{2}$/, 'Sai định dạng HH:mm'),
-  description: z.string().min(10, 'Nội dung tối thiểu 10 ký tự').max(500, 'Nội dung tối đa 500 ký tự'),
-  contactName: z.string().min(2, 'Tên người liên hệ tối thiểu 2 ký tự').max(100, 'Tên người liên hệ tối đa 100 ký tự')
+  preferredDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Sai dinh dang YYYY-MM-DD'),
+  preferredTime: z.string().regex(/^\d{2}:\d{2}$/, 'Sai dinh dang HH:mm'),
+  description: z.string().min(10, 'Noi dung toi thieu 10 ky tu').max(500, 'Noi dung toi da 500 ky tu'),
+  contactName: z.string().min(2, 'Ten nguoi lien he toi thieu 2 ky tu').max(100, 'Ten nguoi lien he toi da 100 ky tu'),
+  contactPhone: z.string().regex(/^\d{10,11}$/, 'So dien thoai khong hop le')
 });
 
 router.use(authenticateToken);

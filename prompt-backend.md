@@ -72,11 +72,10 @@ backend/
 │   │   ├── feedback.service.ts
 │   │   ├── booking.service.ts
 │   │   ├── rating.service.ts
-│   │   ├── events.service.ts    # Đọc từ Google Sheets
-│   │   ├── heritage.service.ts  # Đọc từ Google Sheets
+│   │   ├── events.service.ts    # Quản lý nội dung sự kiện
+│   │   ├── heritage.service.ts  # Quản lý nội dung di tích
 │   │   ├── zaloOA.service.ts    # Gửi tin nhắn vào OA Manager
 │   │   ├── zns.service.ts       # Gửi ZNS đến người dân
-│   │   └── googleSheets.service.ts
 │   │
 │   ├── middleware/
 │   │   ├── auth.middleware.ts   # Xác minh JWT
@@ -161,15 +160,6 @@ CLOUDINARY_CLOUD_NAME=<cloud_name>
 CLOUDINARY_API_KEY=<api_key>
 CLOUDINARY_API_SECRET=<api_secret>
 
-# Google Sheets (Service Account)
-GOOGLE_SERVICE_ACCOUNT_EMAIL=<service_account_email>
-GOOGLE_PRIVATE_KEY=<private_key_multiline>
-GOOGLE_SHEETS_EVENTS_ID=<spreadsheet_id>
-GOOGLE_SHEETS_HERITAGE_ID=<spreadsheet_id>
-
-# Cache TTL (giây)
-CACHE_TTL_SHEETS=300   # 5 phút
-
 # Rate limit
 RATE_LIMIT_WINDOW_MS=900000   # 15 phút
 RATE_LIMIT_MAX_REQUESTS=100
@@ -225,7 +215,6 @@ export interface ApiError {
     "dotenv": "^16.x",
     "express": "^4.x",
     "express-rate-limit": "^7.x",
-    "googleapis": "^140.x",
     "helmet": "^7.x",
     "jsonwebtoken": "^9.x",
     "multer": "^1.x",
@@ -949,84 +938,9 @@ GET /api/ratings/summary  (KHÔNG cần auth)
 
 ---
 
-## PHẦN 8 – NỘI DUNG TỪ GOOGLE SHEETS (EVENTS, HERITAGE)
+## PHẦN 8 – NỘI DUNG SỰ KIỆN, DI TÍCH
 
-### 8.1. Chiến lược Google Sheets làm CMS
-
-```
-Cán bộ phường cập nhật nội dung trực tiếp vào 2 Google Sheets riêng biệt:
-- Sheet Sự kiện (GOOGLE_SHEETS_EVENTS_ID)
-- Sheet Di tích (GOOGLE_SHEETS_HERITAGE_ID)
-
-Back-end đọc data từ Sheets qua Google Sheets API v4, cache in-memory 5 phút.
-KHÔNG dùng Redis. Cache bằng Map<string, { data, expiresAt }> trong module.
-```
-
-### 8.2. Cấu trúc Google Sheets (header hàng 1, data từ hàng 2)
-
-**Sheet Sự kiện:**
-```
-A: id
-B: title
-C: description (HTML)
-D: thumbnailUrl
-E: category    (van-hoa | the-thao | hanh-chinh | le-hoi)
-F: location
-G: startAt     (ISO datetime)
-H: endAt       (ISO datetime)
-I: organizer
-J: contactInfo (optional)
-K: isActive    (TRUE/FALSE)
-```
-
-**Sheet Di tích:**
-```
-A: id
-B: name
-C: type        (lich-su | kien-truc | van-hoa-phi-vat-the)
-D: description (HTML)
-E: imageUrls   (JSON array string: '["url1","url2"]')
-F: address
-G: rankingYear (số hoặc rỗng)
-H: rankingLevel (cấp tỉnh | cấp quốc gia | rỗng)
-I: conservationStatus (Tốt | Khá | Cần tu bổ)
-J: openingHours (optional, VD: "7:00-17:00 hàng ngày")
-K: contactInfo (optional)
-L: isActive    (TRUE/FALSE)
-```
-
-### 8.3. src/services/googleSheets.service.ts
-
-```typescript
-// Khởi tạo Google Sheets API với Service Account:
-//   const auth = new google.auth.GoogleAuth({
-//     credentials: {
-//       client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-//       private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-//     },
-//     scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
-//   });
-//   const sheets = google.sheets({ version: 'v4', auth });
-
-// In-memory cache:
-//   const cache = new Map<string, { data: unknown; expiresAt: number }>();
-
-// Hàm getSheetData(sheetId: string, range: string): Promise<string[][]>
-//   - Kiểm tra cache (key = sheetId + range)
-//   - Nếu cache miss hoặc expired (> CACHE_TTL_SHEETS giây):
-//     + sheets.spreadsheets.values.get({ spreadsheetId: sheetId, range })
-//     + Lưu vào cache với expiresAt = Date.now() + TTL * 1000
-//   - Return values (bỏ hàng đầu tiên là header)
-
-// Hàm parseEventRow(row: string[]): EventItem | null
-// Hàm parseHeritageRow(row: string[]): HeritageItem | null
-//   - Parse từng cột theo cấu trúc Sheet
-//   - Return null nếu isActive = "FALSE" hoặc thiếu field bắt buộc
-//   - Bọc trong try/catch, nếu lỗi log warning và return null
-```
-
-
-### 8.4. Routes – Events, Heritage
+### 8.1. Routes – Events, Heritage
 
 ```
 Tất cả routes dưới đây là PUBLIC (không cần auth middleware).

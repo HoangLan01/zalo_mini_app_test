@@ -1,7 +1,9 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { validate } from '../middleware/validate.middleware';
-import { authenticateToken, requireAdmin } from '../middleware/auth.middleware';
+import { authenticateAdmin, requireAdmin } from '../middleware/auth.middleware';
+import { verifyAdminOrigin } from '../middleware/csrf.middleware';
+import { auditAdminMutation } from '../middleware/adminAudit.middleware';
 import * as eventsController from '../controllers/events.controller';
 
 const router = Router();
@@ -20,7 +22,7 @@ const eventBaseSchema = z.object({
   order: z.number().int().min(0).optional()
 });
 
-router.use(authenticateToken, requireAdmin);
+router.use(authenticateAdmin, requireAdmin, verifyAdminOrigin, auditAdminMutation);
 
 router.get('/', eventsController.getAdminEvents);
 router.post('/', validate(eventBaseSchema), eventsController.createEvent);

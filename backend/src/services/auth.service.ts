@@ -4,6 +4,8 @@ import jwt from 'jsonwebtoken';
 import { UserRole } from '@prisma/client';
 import { prisma } from '../server';
 import logger from '../utils/logger';
+import { ADMIN_ROLES, signAdminToken } from '../utils/adminAuth';
+import { isStrongPassword } from '../utils/password';
 
 const signToken = (payload: { userId: string; zaloId?: string | null; role: UserRole }) => {
   const secret = process.env.JWT_SECRET;
@@ -55,9 +57,9 @@ export const loginWithZalo = async (accessToken: string) => {
 };
 
 export const loginAdmin = async (email: string, password: string) => {
-  const user = await prisma.user.findUnique({ where: { email } });
+  const user = await prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
 
-  if (!user || user.role !== 'ADMIN' || !user.passwordHash) {
+  if (!user || !ADMIN_ROLES.includes(user.role) || user.status !== 'ACTIVE' || !user.passwordHash) {
     throw new Error('INVALID_ADMIN_CREDENTIALS');
   }
 
@@ -66,16 +68,42 @@ export const loginAdmin = async (email: string, password: string) => {
     throw new Error('INVALID_ADMIN_CREDENTIALS');
   }
 
-  const token = signToken({ userId: user.id, zaloId: user.zaloId, role: user.role });
+  const updated = await prisma.user.update({
+    where: { id: user.id },
+    data: { lastLoginAt: new Date() }
+  });
+  const token = signAdminToken({ userId: user.id, role: user.role, sessionVersion: user.sessionVersion });
 
   return {
     token,
     user: {
-      id: user.id,
-      displayName: user.displayName,
-      email: user.email,
-      role: user.role
+      id: updated.id,
+      displayName: updated.displayName,
+      email: updated.email,
+      role: updated.role,
+      mustChangePassword: updated.mustChangePassword
     }
+  };
+};
+
+export const changeAdminPassword = async (userId: string, currentPassword: string, newPassword: string) => {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user?.passwordHash || !(await bcrypt.compare(currentPassword, user.passwordHash))) {
+    throw new Error('INVALID_CURRENT_PASSWORD');
+  }
+  if (!isStrongPassword(newPassword)) throw new Error('WEAK_PASSWORD');
+
+  const updated = await prisma.user.update({
+    where: { id: userId },
+    data: {
+      passwordHash: await bcrypt.hash(newPassword, 12),
+      mustChangePassword: false,
+      sessionVersion: { increment: 1 }
+    }
+  });
+  return {
+    token: signAdminToken({ userId: updated.id, role: updated.role, sessionVersion: updated.sessionVersion }),
+    user: updated
   };
 };
 
