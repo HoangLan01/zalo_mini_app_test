@@ -47,8 +47,11 @@ import Link from '@tiptap/extension-link';
 import Image from '@tiptap/extension-image';
 import './styles.css';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-const TOKEN_KEY = 'quiz_admin_token';
+const API_URL = import.meta.env.VITE_API_URL || (
+  import.meta.env.DEV
+    ? `${window.location.protocol}//${window.location.hostname}:3001`
+    : window.location.origin
+);
 const BOOKING_NOTIFICATION_READ_KEY = 'booking_notification_read_ids';
 
 type ApiResponse<T> = { success: true; data: T } | { success: false; error: { code: string; message: string } };
@@ -135,7 +138,23 @@ type Stats = {
   averageTimeTaken: number;
   leaderboard: Array<{ id: string; score: number; maxScore: number; timeTaken: number; user: { displayName: string } }>;
 };
-type ViewMode = 'dashboard' | 'bank' | 'create' | 'guide' | 'events' | 'bookings' | 'news' | 'procedures' | 'users' | 'settings';
+type AdminUser = { id: string; displayName: string; email: string; role: 'ADMIN' | 'SUPER_ADMIN'; status: 'ACTIVE' | 'DISABLED'; mustChangePassword: boolean; lastLoginAt?: string | null };
+type ManagedAdmin = AdminUser & { createdAt: string; updatedAt: string; createdBy?: { displayName: string; email: string } | null };
+type AdminAuditLog = { id: string; action: string; entityType: string; entityId?: string | null; metadata?: unknown; ipAddress?: string | null; createdAt: string; actor: { displayName: string; email: string } };
+type ViewMode = 'dashboard' | 'bank' | 'create' | 'guide' | 'events' | 'bookings' | 'news' | 'procedures' | 'users' | 'admins' | 'settings';
+const VIEW_CONFIG: Record<ViewMode, { title: string; section: string; label: string }> = {
+  dashboard: { title: 'Tổng quan', section: 'Hệ thống', label: 'Tổng quan hệ thống' },
+  bank: { title: 'Ngân hàng câu hỏi', section: 'Kiến thức Chuyển đổi số', label: 'Quản lý câu hỏi' },
+  create: { title: 'Thêm câu hỏi mới', section: 'Kiến thức Chuyển đổi số', label: 'Thêm câu hỏi mới' },
+  guide: { title: 'Hướng dẫn sử dụng', section: 'Hệ thống', label: 'Hướng dẫn sử dụng' },
+  events: { title: 'Quản lý sự kiện', section: 'Quản lý nội dung', label: 'Sự kiện' },
+  bookings: { title: 'Quản lý lịch hẹn', section: 'Nghiệp vụ', label: 'Lịch hẹn' },
+  news: { title: 'Tin tức & Sự kiện', section: 'Quản lý nội dung', label: 'Tin tức & Sự kiện' },
+  procedures: { title: 'Thủ tục hành chính', section: 'Quản lý nội dung', label: 'Thủ tục hành chính' },
+  users: { title: 'Quản lý người dùng', section: 'Hệ thống', label: 'Người dùng' },
+  admins: { title: 'Quản trị viên', section: 'Hệ thống', label: 'Quản trị viên' },
+  settings: { title: 'Cài đặt hệ thống', section: 'Hệ thống', label: 'Cài đặt' }
+};
 type DashboardData = {
   summary: { totalUsers: number; totalTopics: number; totalSets: number; totalAttempts: number };
   dailyAttempts: { date: string; count: number }[];
@@ -198,32 +217,31 @@ const emptyEventForm = (): EventFormState => ({
 });
 
 async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = localStorage.getItem(TOKEN_KEY);
   const res = await fetch(`${API_URL}${path}`, {
     ...options,
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...options.headers
     }
   });
   const json = (await res.json()) as ApiResponse<T>;
   if (!res.ok || !json.success) {
+    if ((res.status === 401 || res.status === 403) && !path.includes('/admin/login')) {
+      window.dispatchEvent(new Event('admin-session-invalid'));
+    }
     throw new Error(json.success ? `HTTP ${res.status}` : json.error.message);
   }
   return json.data;
 }
 
 async function uploadEventImages(files: File[]): Promise<string[]> {
-  const token = localStorage.getItem(TOKEN_KEY);
   const formData = new FormData();
   files.forEach(file => formData.append('files', file));
 
   const res = await fetch(`${API_URL}/api/upload?purpose=event`, {
     method: 'POST',
-    headers: {
-      ...(token ? { Authorization: `Bearer ${token}` } : {})
-    },
+    credentials: 'include',
     body: formData
   });
   const json = (await res.json()) as ApiResponse<{ urls: string[] }>;
@@ -432,6 +450,7 @@ const getViewFromLocation = (): ViewMode => {
   if (v === 'news') return 'news';
   if (v === 'procedures') return 'procedures';
   if (v === 'users') return 'users';
+  if (v === 'admins') return 'admins';
   if (v === 'settings') return 'settings';
   return 'dashboard';
 };
@@ -460,7 +479,7 @@ const saveBookingNotificationIds = (ids: string[]) => {
   localStorage.setItem(BOOKING_NOTIFICATION_READ_KEY, JSON.stringify(Array.from(new Set(ids))));
 };
 
-function Login({ onLogin }: { onLogin: () => void }) {
+function Login({ onLogin }: { onLogin: (user: AdminUser) => void }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -469,12 +488,11 @@ function Login({ onLogin }: { onLogin: () => void }) {
     event.preventDefault();
     setError('');
     try {
-      const data = await api<{ token: string }>('/api/auth/admin/login', {
+      const data = await api<{ user: AdminUser }>('/api/auth/admin/login', {
         method: 'POST',
         body: JSON.stringify({ email, password })
       });
-      localStorage.setItem(TOKEN_KEY, data.token);
-      onLogin();
+      onLogin(data.user);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Không thể đăng nhập');
     }
@@ -506,13 +524,51 @@ function Login({ onLogin }: { onLogin: () => void }) {
   );
 }
 
-function App() {
-  const [loggedIn, setLoggedIn] = useState(Boolean(localStorage.getItem(TOKEN_KEY)));
-  if (!loggedIn) return <Login onLogin={() => setLoggedIn(true)} />;
-  return <Dashboard onLogout={() => { localStorage.removeItem(TOKEN_KEY); setLoggedIn(false); }} />;
+function ChangePassword({ onChanged }: { onChanged: () => void }) {
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [error, setError] = useState('');
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    try {
+      await api('/api/auth/admin/change-password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) });
+      onChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Không thể đổi mật khẩu');
+    }
+  };
+  return (
+    <main className="login-shell">
+      <form className="login-card glass-card" onSubmit={submit}>
+        <Shield size={40} />
+        <div><p className="eyebrow">Bảo mật tài khoản</p><h1>Đổi mật khẩu bắt buộc</h1></div>
+        <p className="muted">Mật khẩu mới cần ít nhất 12 ký tự, gồm chữ hoa, chữ thường, số và ký tự đặc biệt.</p>
+        <label>Mật khẩu hiện tại<input type="password" required value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} /></label>
+        <label>Mật khẩu mới<input type="password" required minLength={12} value={newPassword} onChange={e => setNewPassword(e.target.value)} /></label>
+        {error && <Notice tone="error" message={error} />}
+        <button className="primary-button" type="submit">Đổi mật khẩu</button>
+      </form>
+    </main>
+  );
 }
 
-function Dashboard({ onLogout }: { onLogout: () => void }) {
+function App() {
+  const [user, setUser] = useState<AdminUser | null>(null);
+  const [loadingSession, setLoadingSession] = useState(true);
+  const loadMe = useCallback(() => api<AdminUser>('/api/auth/admin/me').then(setUser), []);
+  useEffect(() => {
+    loadMe().catch(() => setUser(null)).finally(() => setLoadingSession(false));
+    const clear = () => setUser(null);
+    window.addEventListener('admin-session-invalid', clear);
+    return () => window.removeEventListener('admin-session-invalid', clear);
+  }, [loadMe]);
+  if (loadingSession) return <main className="login-shell"><div className="login-card glass-card">Đang kiểm tra phiên đăng nhập...</div></main>;
+  if (!user) return <Login onLogin={setUser} />;
+  if (user.mustChangePassword) return <ChangePassword onChanged={() => loadMe().catch(() => setUser(null))} />;
+  return <Dashboard user={user} onLogout={() => api('/api/auth/admin/logout', { method: 'POST' }).finally(() => setUser(null))} />;
+}
+
+function Dashboard({ user, onLogout }: { user: AdminUser; onLogout: () => void }) {
   const [view, setView] = useState<ViewMode>(() => getViewFromLocation());
   const [topics, setTopics] = useState<Topic[]>([]);
   const [sets, setSets] = useState<QuizSet[]>([]);
@@ -610,6 +666,10 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
     }
     setView(nextView);
   }, []);
+
+  useEffect(() => {
+    if (view === 'admins' && user.role !== 'SUPER_ADMIN') navigateView('dashboard', 'replace');
+  }, [navigateView, user.role, view]);
 
   const loadTopics = async () => {
     setTopics(await api<Topic[]>('/api/admin/quiz/topics'));
@@ -790,11 +850,11 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
 
   return (
     <AdminShell
+      user={user}
       view={view}
       onNavigate={navigateView}
       onLogout={onLogout}
       onCreateQuestion={startCreateQuestion}
-      onSaveQuestion={undefined}
       onCloneClick={() => openModal('SET_CLONE')}
       onCloseClick={() => openModal('SET_CLOSE')}
       onPublishClick={() => openModal('SET_PUBLISH')}
@@ -871,6 +931,8 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
         <EventManagementView showMessage={showMessage} />
       ) : view === 'bookings' ? (
         <BookingManagementView showMessage={showMessage} onSummaryChange={applyBookingSummary} />
+      ) : view === 'admins' && user.role === 'SUPER_ADMIN' ? (
+        <AdminManagementView currentUser={user} showMessage={showMessage} />
       ) : ['news', 'procedures', 'users', 'settings'].includes(view) ? (
         <ComingSoonView view={view} />
       ) : view === 'bank' ? (
@@ -918,11 +980,11 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
 
 function AdminShell({
   children,
+  user,
   view,
   onNavigate,
   onLogout,
   onCreateQuestion,
-  onSaveQuestion,
   onCloneClick,
   onCloseClick,
   onPublishClick,
@@ -933,11 +995,11 @@ function AdminShell({
   onReloadBookingNotifications
 }: {
   children: React.ReactNode;
+  user: AdminUser;
   view: ViewMode;
   onNavigate: (view: ViewMode, mode?: NavigationMode) => void;
   onLogout: () => void;
   onCreateQuestion: () => void;
-  onSaveQuestion?: () => void;
   onCloneClick?: () => void;
   onCloseClick?: () => void;
   onPublishClick?: () => void;
@@ -977,11 +1039,7 @@ function AdminShell({
     setIsNotificationOpen(false);
     onNavigate('bookings');
   };
-  const pageTitle = view === 'dashboard' ? 'Tổng quan' :
-    view === 'bank' ? 'Ngân hàng câu hỏi' :
-    view === 'events' ? 'Quản lý sự kiện' :
-    view === 'guide' ? 'Hướng dẫn sử dụng' :
-    'Thêm câu hỏi mới';
+  const viewConfig = VIEW_CONFIG[view];
   return (
     <main className="admin-layout">
       <aside className="sidebar">
@@ -1020,16 +1078,21 @@ function AdminShell({
           <button className={view === 'users' ? 'nav-item active' : 'nav-item'} onClick={() => onNavigate('users')}>
             <Award size={20} /> Người dùng
           </button>
+          {user.role === 'SUPER_ADMIN' && (
+            <button className={view === 'admins' ? 'nav-item active' : 'nav-item'} onClick={() => onNavigate('admins')}>
+              <Shield size={20} /> Quản trị viên
+            </button>
+          )}
           <button className={view === 'settings' ? 'nav-item active' : 'nav-item'} onClick={() => onNavigate('settings')}>
             <Settings size={20} /> Cài đặt
           </button>
         </nav>
 
         <div className="sidebar-user">
-          <div className="avatar">NA</div>
+          <div className="avatar">{user.displayName.slice(0, 2).toUpperCase()}</div>
           <div className="user-info">
-            <strong>Nguyễn Văn An</strong>
-            <span>Quản trị viên</span>
+            <strong>{user.displayName}</strong>
+            <span>{user.role === 'SUPER_ADMIN' ? 'Super Admin' : 'Admin'}</span>
           </div>
           <button className="logout-button" onClick={onLogout} title="Đăng xuất">
             <LogOut size={18} />
@@ -1042,25 +1105,25 @@ function AdminShell({
           <div>
             <div className="breadcrumb">
               {view === 'dashboard' ? (
-                <strong>Tổng quan hệ thống</strong>
-              ) : ['events', 'bookings', 'news', 'procedures', 'users', 'settings'].includes(view) ? (
-               <button className="primary-button" onClick={() => onNavigate('dashboard')}>Về trang chủ</button>
-             ) : (
+                <strong>{viewConfig.label}</strong>
+              ) : view === 'bank' || view === 'create' ? (
                 <>
-                  <span>Kiến thức Chuyển đổi số</span>
+                  <button onClick={() => onNavigate('dashboard')}>Tổng quan</button>
                   <span>/</span>
                   <button onClick={() => onNavigate('bank')}>Quản lý câu hỏi</button>
-                  {view === 'guide' && <><span>/</span><strong>Hướng dẫn sử dụng</strong></>}
-                  {view === 'news' && <><span>/</span><strong>Tin tức & Sự kiện</strong></>}
-                  {view === 'events' && <><span>/</span><strong>Quản lý sự kiện</strong></>}
-                  {view === 'procedures' && <><span>/</span><strong>Thủ tục hành chính</strong></>}
-                  {view === 'users' && <><span>/</span><strong>Quản lý người dùng</strong></>}
-                  {view === 'settings' && <><span>/</span><strong>Cài đặt hệ thống</strong></>}
                   {view === 'create' && <><span>/</span><strong>Thêm câu hỏi mới</strong></>}
+                </>
+              ) : (
+                <>
+                  <button onClick={() => onNavigate('dashboard')}>Tổng quan</button>
+                  <span>/</span>
+                  <span>{viewConfig.section}</span>
+                  <span>/</span>
+                  <strong>{viewConfig.label}</strong>
                 </>
               )}
             </div>
-            <h1>{view === 'bookings' ? 'Quản lý lịch hẹn' : pageTitle}</h1>
+            <h1>{viewConfig.title}</h1>
           </div>
           <div className="topbar-actions">
             <button
@@ -1115,16 +1178,7 @@ function AdminShell({
                 <button className="primary-button strong" onClick={onPublishClick}>Xuất bản</button>
                 <button className="primary-button" onClick={onCreateQuestion}><Plus size={20} /> Thêm câu hỏi</button>
               </>
-            ) : view === 'guide' ? (
-              <button className="primary-button" onClick={() => onNavigate('bank')}>Quay lại quản lý</button>
-            ) : view === 'events' || view === 'bookings' ? (
-              null
-            ) : (
-              <>
-                <button className="secondary-button" onClick={() => onNavigate('bank', 'replace')}>Hủy</button>
-                <button className="primary-button" onClick={onSaveQuestion}><Save size={19} /> Lưu câu hỏi</button>
-              </>
-            )}
+            ) : null}
           </div>
         </header>
         <div className="content-shell">{children}</div>
@@ -2345,6 +2399,102 @@ function DashboardView({ data, range, onRangeChange }: {
           ) : <p className="muted" style={{ padding: '16px 0' }}>Chưa có hoạt động nào.</p>}
         </section>
       </div>
+    </div>
+  );
+}
+
+function AdminManagementView({ currentUser, showMessage }: { currentUser: AdminUser; showMessage: (text: string, tone?: 'info' | 'error') => void }) {
+  const [tab, setTab] = useState<'accounts' | 'audit'>('accounts');
+  const [accounts, setAccounts] = useState<ManagedAdmin[]>([]);
+  const [logs, setLogs] = useState<AdminAuditLog[]>([]);
+  const [search, setSearch] = useState('');
+  const [role, setRole] = useState('ALL');
+  const [status, setStatus] = useState('ALL');
+  const [temporaryPassword, setTemporaryPassword] = useState('');
+  const [form, setForm] = useState({ displayName: '', email: '', role: 'ADMIN' as 'ADMIN' | 'SUPER_ADMIN' });
+
+  const loadAccounts = useCallback(async () => {
+    const params = new URLSearchParams();
+    if (search) params.set('search', search);
+    if (role !== 'ALL') params.set('role', role);
+    if (status !== 'ALL') params.set('status', status);
+    const data = await api<{ items: ManagedAdmin[] }>(`/api/admin/accounts?${params}`);
+    setAccounts(data.items);
+  }, [role, search, status]);
+  const loadLogs = useCallback(async () => {
+    const data = await api<{ items: AdminAuditLog[] }>('/api/admin/audit-logs?limit=50');
+    setLogs(data.items);
+  }, []);
+  useEffect(() => { (tab === 'accounts' ? loadAccounts() : loadLogs()).catch(err => showMessage(err.message, 'error')); }, [tab, loadAccounts, loadLogs, showMessage]);
+
+  const run = async (fn: () => Promise<unknown>, message: string) => {
+    try { await fn(); await loadAccounts(); showMessage(message); } catch (err) { showMessage(err instanceof Error ? err.message : 'Thao tác thất bại', 'error'); }
+  };
+  const create = async (event: React.FormEvent) => {
+    event.preventDefault();
+    try {
+      const data = await api<{ temporaryPassword: string }>('/api/admin/accounts', { method: 'POST', body: JSON.stringify(form) });
+      setTemporaryPassword(data.temporaryPassword);
+      setForm({ displayName: '', email: '', role: 'ADMIN' });
+      await loadAccounts();
+    } catch (err) { showMessage(err instanceof Error ? err.message : 'Không thể tạo tài khoản', 'error'); }
+  };
+  const edit = async (account: ManagedAdmin) => {
+    const displayName = window.prompt('Tên hiển thị', account.displayName);
+    if (displayName === null) return;
+    const email = window.prompt('Email', account.email);
+    if (email === null) return;
+    const nextRole = window.prompt('Role: ADMIN hoặc SUPER_ADMIN', account.role);
+    if (nextRole !== 'ADMIN' && nextRole !== 'SUPER_ADMIN') return showMessage('Role không hợp lệ', 'error');
+    await run(() => api(`/api/admin/accounts/${account.id}`, { method: 'PATCH', body: JSON.stringify({ displayName, email, role: nextRole }) }), 'Đã cập nhật tài khoản');
+  };
+  const resetPassword = async (account: ManagedAdmin) => {
+    try {
+      const data = await api<{ temporaryPassword: string }>(`/api/admin/accounts/${account.id}/reset-password`, { method: 'POST' });
+      setTemporaryPassword(data.temporaryPassword);
+      await loadAccounts();
+    } catch (err) { showMessage(err instanceof Error ? err.message : 'Không thể reset mật khẩu', 'error'); }
+  };
+
+  return (
+    <div className="event-management-layout">
+      <div className="toolbar glass-card">
+        <button className={tab === 'accounts' ? 'primary-button compact' : 'secondary-button compact'} onClick={() => setTab('accounts')}>Tài khoản</button>
+        <button className={tab === 'audit' ? 'primary-button compact' : 'secondary-button compact'} onClick={() => setTab('audit')}>Nhật ký hoạt động</button>
+      </div>
+      {temporaryPassword && <section className="notice info"><span>Mật khẩu tạm thời, chỉ hiển thị lần này: <strong>{temporaryPassword}</strong></span><button onClick={() => setTemporaryPassword('')}>Đóng</button></section>}
+      {tab === 'accounts' ? <>
+        <form className="glass-card form-card admin-create-form" onSubmit={create}>
+          <div className="section-heading tight"><div><p className="eyebrow">SUPER_ADMIN</p><h2>Tạo tài khoản quản trị</h2></div></div>
+          <input required placeholder="Tên hiển thị" value={form.displayName} onChange={e => setForm({ ...form, displayName: e.target.value })} />
+          <input required type="email" placeholder="Email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
+          <Select value={form.role} onChange={value => setForm({ ...form, role: value as 'ADMIN' | 'SUPER_ADMIN' })} ariaLabel="Vai trò"><option value="ADMIN">ADMIN</option><option value="SUPER_ADMIN">SUPER_ADMIN</option></Select>
+          <button className="primary-button" type="submit"><Plus size={18} /> Tạo tài khoản</button>
+        </form>
+        <section className="glass-card table-card">
+          <div className="toolbar">
+            <div className="search-box"><Search size={18} /><input placeholder="Tìm tên hoặc email" value={search} onChange={e => setSearch(e.target.value)} /></div>
+            <Select value={role} onChange={setRole} ariaLabel="Lọc role"><option value="ALL">Mọi role</option><option value="ADMIN">ADMIN</option><option value="SUPER_ADMIN">SUPER_ADMIN</option></Select>
+            <Select value={status} onChange={setStatus} ariaLabel="Lọc trạng thái"><option value="ALL">Mọi trạng thái</option><option value="ACTIVE">ACTIVE</option><option value="DISABLED">DISABLED</option></Select>
+          </div>
+          <div className="admin-account-list">
+            {accounts.map(account => <div className="admin-account-row" key={account.id}>
+              <div className="question-cell"><strong>{account.displayName}</strong><small>{account.email}</small></div>
+              <span className="chip">{account.role}</span>
+              <span className={`status-badge ${account.status === 'ACTIVE' ? 'status-published' : 'status-closed'}`}>{account.status}</span>
+              <small>{account.lastLoginAt ? formatDateTime(account.lastLoginAt) : 'Chưa đăng nhập'}</small>
+              <div className="row-actions">
+                <button className="icon-button" title="Sửa" onClick={() => edit(account)}><Edit size={16} /></button>
+                <button className="secondary-button compact" onClick={() => resetPassword(account)}>Reset mật khẩu</button>
+                <button disabled={account.id === currentUser.id} className="secondary-button compact" onClick={() => run(() => api(`/api/admin/accounts/${account.id}/${account.status === 'ACTIVE' ? 'disable' : 'enable'}`, { method: 'POST' }), account.status === 'ACTIVE' ? 'Đã khóa tài khoản' : 'Đã mở khóa tài khoản')}>{account.status === 'ACTIVE' ? 'Khóa' : 'Mở khóa'}</button>
+              </div>
+            </div>)}
+          </div>
+        </section>
+      </> : <section className="glass-card table-card">
+        <div className="section-heading tight"><div><p className="eyebrow">Audit</p><h2>Hoạt động gần đây</h2></div></div>
+        <div className="admin-audit-list">{logs.map(log => <div className="admin-audit-row" key={log.id}><div><strong>{log.action}</strong><small>{log.entityType}{log.entityId ? ` · ${log.entityId}` : ''}</small></div><div><strong>{log.actor.displayName}</strong><small>{log.actor.email}</small></div><span>{formatDateTime(log.createdAt)}</span></div>)}</div>
+      </section>}
     </div>
   );
 }

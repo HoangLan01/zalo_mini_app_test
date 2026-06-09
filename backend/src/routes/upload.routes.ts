@@ -3,6 +3,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import { authenticateToken } from '../middleware/auth.middleware';
 import * as uploadController from '../controllers/upload.controller';
+import { verifyAdminOrigin } from '../middleware/csrf.middleware';
 
 const router = Router();
 
@@ -23,7 +24,8 @@ const upload = multer({
 
 router.post(
   '/', 
-  authenticateToken, 
+  authenticateToken,
+  (req, res, next) => String(req.query.purpose || '') === 'event' ? verifyAdminOrigin(req, res, next) : next(),
   upload.array('files', 10), 
   uploadController.upload
 );

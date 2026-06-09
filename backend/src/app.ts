@@ -24,6 +24,7 @@ import adminQuizRoutes from './routes/adminQuiz.routes';
 import eventsRoutes from './routes/events.routes';
 import adminEventsRoutes from './routes/adminEvents.routes';
 import adminBookingRoutes from './routes/adminBooking.routes';
+import adminAccountRoutes from './routes/adminAccount.routes';
 
 const app = express();
 
@@ -38,8 +39,14 @@ app.use('/webhook/zalo', express.raw({ type: 'application/json' }), webhookRoute
 app.use(helmet());
 
 // 3. CORS — cho phép frontend dev gọi API (frontend: 5173-5175, backend: 3000)
+const allowedOrigins = [process.env.APP_URL, process.env.ADMIN_APP_URL]
+  .flatMap(value => (value || '').split(','))
+  .map(value => value.trim())
+  .filter(Boolean);
 app.use(cors({
-  origin: process.env.NODE_ENV === 'development' ? true : (process.env.APP_URL || '*'),
+  origin: process.env.NODE_ENV === 'development'
+    ? true
+    : (origin, callback) => callback(null, !origin || allowedOrigins.includes(origin)),
   credentials: true
 }));
 
@@ -75,6 +82,7 @@ app.use('/api/events', publicQuizRateLimiter, eventsRoutes);
 app.use('/api/admin/quiz', adminQuizRateLimiter, adminQuizRoutes);
 app.use('/api/admin/events', adminQuizRateLimiter, adminEventsRoutes);
 app.use('/api/admin/bookings', adminBookingRateLimiter, adminBookingRoutes);
+app.use('/api/admin', adminQuizRateLimiter, adminAccountRoutes);
 
 // 8. 404 Handler
 app.use((req, res, next) => {

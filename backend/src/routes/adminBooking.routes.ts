@@ -1,7 +1,9 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { BookingStatus } from '@prisma/client';
-import { authenticateToken, requireAdmin } from '../middleware/auth.middleware';
+import { authenticateAdmin, requireAdmin } from '../middleware/auth.middleware';
+import { verifyAdminOrigin } from '../middleware/csrf.middleware';
+import { auditAdminMutation } from '../middleware/adminAudit.middleware';
 import { validate } from '../middleware/validate.middleware';
 import * as bookingController from '../controllers/booking.controller';
 
@@ -15,7 +17,7 @@ const updateBookingStatusSchema = z.object({
   rescheduledNote: z.string().max(500).optional()
 });
 
-router.use(authenticateToken, requireAdmin);
+router.use(authenticateAdmin, requireAdmin, verifyAdminOrigin, auditAdminMutation);
 
 router.get('/summary', bookingController.getAdminBookingSummary);
 router.get('/', bookingController.getAdminBookings);

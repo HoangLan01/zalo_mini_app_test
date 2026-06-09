@@ -27,8 +27,16 @@ model User {
   passwordHash String?
   phoneToken   String?
   role         UserRole      @default(USER)
+  status       UserStatus    @default(ACTIVE)
+  sessionVersion Int         @default(0)
+  mustChangePassword Boolean @default(false)
+  lastLoginAt  DateTime?     @db.Timestamptz(6)
+  createdById  String?
   createdAt    DateTime      @default(now()) @db.Timestamptz(6)
   updatedAt    DateTime      @default(now()) @updatedAt @db.Timestamptz(6)
+  createdBy    User?         @relation("AdminCreatedBy", fields: [createdById], references: [id])
+  createdUsers User[]        @relation("AdminCreatedBy")
+  auditLogs    AdminAuditLog[] @relation("AdminAuditActor")
   bookings     Booking[]
   feedbacks    Feedback[]
   ratings      Rating[]
@@ -38,6 +46,24 @@ model User {
   @@index([zaloId])
   @@index([email])
   @@map("users")
+}
+
+model AdminAuditLog {
+  id         String   @id @default(uuid())
+  actorId    String
+  action     String   @db.VarChar(100)
+  entityType String   @db.VarChar(100)
+  entityId   String?
+  metadata   Json?
+  ipAddress  String?  @db.VarChar(100)
+  userAgent  String?
+  createdAt  DateTime @default(now()) @db.Timestamptz(6)
+  actor      User     @relation("AdminAuditActor", fields: [actorId], references: [id])
+
+  @@index([createdAt(sort: Desc)])
+  @@index([actorId, createdAt(sort: Desc)])
+  @@index([entityType, entityId])
+  @@map("admin_audit_logs")
 }
 
 model Booking {
@@ -254,6 +280,12 @@ model QuizAttemptAnswer {
 enum UserRole {
   USER
   ADMIN
+  SUPER_ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
 }
 
 enum QuizSetStatus {

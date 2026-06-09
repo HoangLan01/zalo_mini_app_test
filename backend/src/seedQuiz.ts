@@ -1,7 +1,6 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-import bcrypt from 'bcryptjs';
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
@@ -15,37 +14,6 @@ const slugify = (value: string) => value
   .slice(0, 120);
 
 async function main() {
-  const isProduction = process.env.NODE_ENV === 'production';
-  const defaultAdminEmail = 'admin@example.com';
-  const defaultAdminPassword = 'Admin@123456';
-  const adminEmail = process.env.ADMIN_EMAIL || (!isProduction ? defaultAdminEmail : '');
-  const adminPassword = process.env.ADMIN_PASSWORD || (!isProduction ? defaultAdminPassword : '');
-
-  if (!adminEmail || !adminPassword) {
-    throw new Error('ADMIN_EMAIL and ADMIN_PASSWORD must be set before seeding production data.');
-  }
-
-  if (isProduction && (adminEmail === defaultAdminEmail || adminPassword === defaultAdminPassword)) {
-    throw new Error('Default admin credentials are not allowed in production.');
-  }
-
-  const passwordHash = await bcrypt.hash(adminPassword, 10);
-
-  await prisma.user.upsert({
-    where: { email: adminEmail },
-    update: {
-      displayName: 'Quản trị viên',
-      passwordHash,
-      role: 'ADMIN'
-    },
-    create: {
-      email: adminEmail,
-      displayName: 'Quản trị viên',
-      passwordHash,
-      role: 'ADMIN'
-    }
-  });
-
   const topic = await prisma.quizTopic.upsert({
     where: { slug: 'kien-thuc-chuyen-doi-so' },
     update: {
