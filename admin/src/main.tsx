@@ -507,7 +507,7 @@ function Login({ onLogin }: { onLogin: (user: AdminUser) => void }) {
         <div>
           <p className="eyebrow">Tùng Thiện Digital Admin</p>
           <h1>Đăng nhập quản trị</h1>
-          <p className="muted">Quản lý ngân hàng câu hỏi chuyển đổi số.</p>
+          <p className="muted">Quản lý Zalo Mini App dành cho Admin.</p>
         </div>
         <label>
           Email

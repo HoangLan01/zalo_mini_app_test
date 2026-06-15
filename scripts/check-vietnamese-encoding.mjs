@@ -1,6 +1,36 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
+import { extname, join, relative } from 'node:path';
 
-const files = ['src/pages/index/index.tsx', 'app-config.json'];
+const roots = ['src', 'admin/src', 'backend/src', 'backend/prisma', 'scripts'];
+const rootFiles = ['app-config.json', '.env.example', 'backend/.env.example'];
+const textExtensions = new Set([
+  '.css',
+  '.html',
+  '.js',
+  '.json',
+  '.md',
+  '.mjs',
+  '.prisma',
+  '.scss',
+  '.sql',
+  '.ts',
+  '.tsx',
+  '.yml',
+  '.yaml',
+]);
+
+function collectTextFiles(directory) {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) return collectTextFiles(path);
+    return textExtensions.has(extname(entry.name).toLowerCase()) ? [path] : [];
+  });
+}
+
+const files = [
+  ...rootFiles,
+  ...roots.flatMap(collectTextFiles),
+].map((file) => relative('.', file).replaceAll('\\', '/'));
 
 const mojibakePatterns = [
   'Ph\u00c6\u00b0',
@@ -72,4 +102,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log('Vietnamese encoding audit passed for src/pages/index/index.tsx and app-config.json.');
+console.log(`Vietnamese encoding audit passed for ${files.length} source and configuration files.`);
