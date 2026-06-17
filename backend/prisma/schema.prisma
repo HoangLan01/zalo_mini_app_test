@@ -99,8 +99,12 @@ model Feedback {
   id          String           @id @default(uuid())
   code        String           @unique @db.VarChar(20)
   userId      String
+  type        FeedbackType     @default(FIELD)
   title       String           @db.VarChar(100)
   category    FeedbackCategory
+  serviceUnit String?          @db.VarChar(255)
+  satisfactionScore Int?       @db.SmallInt
+  contactPhone String?         @db.VarChar(20)
   description String
   imageUrls   String[]         @default([])
   latitude    Float?
@@ -115,6 +119,7 @@ model Feedback {
   user        User             @relation(fields: [userId], references: [id])
 
   @@index([createdAt(sort: Desc)])
+  @@index([type])
   @@index([status])
   @@index([userId])
   @@index([userId, status])
@@ -326,6 +331,11 @@ enum FeedbackStatus {
   PROCESSING
   TRANSFERRED
   RESOLVED
+}
+
+enum FeedbackType {
+  FIELD
+  SERVICE_ATTITUDE
 }
 
 enum FeedbackCategory {

@@ -1,4 +1,4 @@
-import React, { useLayoutEffect } from 'react';
+import React, { useLayoutEffect, useState } from 'react';
 import { Page, Text, useNavigate } from 'zmp-ui';
 import { openChat } from 'zmp-sdk/apis';
 
@@ -178,6 +178,7 @@ const getGreetingName = (name?: string) => name || 'Công dân Tùng Thiện';
 const IndexPage: React.FC = () => {
   const navigate = useNavigate();
   const { userInfo } = useUserStore();
+  const [showFeedbackTypeModal, setShowFeedbackTypeModal] = useState(false);
   const citizenName = getGreetingName(userInfo?.name);
   const shouldAnimateName = citizenName.length > 18;
 
@@ -191,6 +192,11 @@ const IndexPage: React.FC = () => {
   const navigateFromHome = (path: string, state?: Record<string, unknown>) => {
     saveHomeScrollPosition();
     navigate(path, state ? { state } : undefined);
+  };
+
+  const openFeedbackCreate = (type: 'FIELD' | 'SERVICE_ATTITUDE') => {
+    setShowFeedbackTypeModal(false);
+    navigateFromHome('/feedback-create', { type });
   };
 
   const handleOpenChat = async () => {
@@ -212,7 +218,7 @@ const IndexPage: React.FC = () => {
       subtitle: 'Kiến nghị',
       icon: 'megaphone' as IconName,
       tone: 'blue',
-      onClick: () => navigateFromHome('/feedback'),
+      onClick: () => setShowFeedbackTypeModal(true),
     },
     {
       title: 'Đặt lịch',
@@ -398,6 +404,75 @@ const IndexPage: React.FC = () => {
           <Text>NỀN TẢNG PHỤC VỤ CÔNG DÂN SỐ</Text>
         </footer>
       </main>
+
+      {showFeedbackTypeModal && (
+        <div
+          className="feedback-choice-overlay"
+          role="presentation"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setShowFeedbackTypeModal(false);
+          }}
+        >
+          <section className="feedback-choice-sheet" role="dialog" aria-modal="true" aria-labelledby="feedback-choice-title">
+            <header className="feedback-choice-header">
+              <Text id="feedback-choice-title" className="feedback-choice-title">Chọn loại phản ánh</Text>
+              <button
+                type="button"
+                className="feedback-choice-close"
+                aria-label="Đóng"
+                onClick={() => setShowFeedbackTypeModal(false)}
+              >
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                  <path d="M18 6 6 18" />
+                  <path d="m6 6 12 12" />
+                </svg>
+              </button>
+            </header>
+
+            <div className="feedback-choice-body">
+              <button type="button" className="feedback-choice-card" onClick={() => openFeedbackCreate('SERVICE_ATTITUDE')}>
+                <span className="feedback-choice-icon feedback-choice-icon-blue" aria-hidden="true">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M16 11a4 4 0 1 0-8 0" />
+                    <path d="M4.5 20a6.5 6.5 0 0 1 11 0" />
+                    <path d="m17 15 1.7 1.7L22 13.4" />
+                  </svg>
+                </span>
+                <span className="feedback-choice-copy">
+                  <strong>Phản ánh thái độ phục vụ</strong>
+                  <span>Góp ý về tinh thần, thái độ làm việc của cán bộ.</span>
+                </span>
+              </button>
+
+              <button
+                type="button"
+                className="feedback-choice-card"
+                onClick={() => {
+                  setShowFeedbackTypeModal(false);
+                  navigateFromHome('/feedback');
+                }}
+              >
+                <span className="feedback-choice-icon feedback-choice-icon-orange" aria-hidden="true">
+                  <svg width="29" height="29" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M6.5 7.5 8 5h4l1.5 2.5H18a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V9.5a2 2 0 0 1 2-2h.5Z" />
+                    <circle cx="12" cy="13" r="3" />
+                    <path d="M18.5 5.5v3" />
+                    <path d="M17 7h3" />
+                  </svg>
+                </span>
+                <span className="feedback-choice-copy">
+                  <strong>Phản ánh hiện trường</strong>
+                  <span>Báo cáo sự cố hạ tầng, vệ sinh môi trường, trật tự đô thị.</span>
+                </span>
+              </button>
+
+              <Text className="feedback-choice-note">
+                Vui lòng chọn loại phản ánh phù hợp để được hỗ trợ nhanh nhất.
+              </Text>
+            </div>
+          </section>
+        </div>
+      )}
     </Page>
   );
 };

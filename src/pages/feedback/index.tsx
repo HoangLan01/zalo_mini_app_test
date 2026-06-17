@@ -1,35 +1,86 @@
-import React, { useState } from 'react';
-import { Page, Box, Text, Tabs } from 'zmp-ui';
-import { useNavigate } from 'zmp-ui';
+import React, { useEffect, useState } from 'react';
+import { Page, Box, Text, Tabs, useNavigate, useSnackbar } from 'zmp-ui';
 import PageHeader from '@/components/PageHeader';
-import { useFeedbackStore } from '@/store/feedbackStore';
+import { apiCall } from '@/services/api';
 
-const statusConfig: Record<string, { gradient: string; icon: string; label: string }> = {
-  pending:    { gradient: 'linear-gradient(135deg, #FFA500, #FF8C00)', icon: '⏳', label: 'Tiếp nhận' },
-  processing: { gradient: 'linear-gradient(135deg, #246BFD, #5089FD)', icon: '🔄', label: 'Đang xử lý' },
-  resolved:   { gradient: 'linear-gradient(135deg, #10B981, #059669)', icon: '✅', label: 'Đã giải quyết' },
+type FeedbackType = 'FIELD' | 'SERVICE_ATTITUDE';
+type FeedbackStatus = 'PENDING' | 'PROCESSING' | 'TRANSFERRED' | 'RESOLVED';
+type FeedbackItem = {
+  id: string;
+  code: string;
+  type: FeedbackType;
+  title: string;
+  description: string;
+  status: FeedbackStatus;
+  category: string;
+  serviceUnit?: string | null;
+  satisfactionScore?: number | null;
+  imageUrls: string[];
+  response?: string | null;
+  createdAt: string;
 };
+
+const statusLabels: Record<FeedbackStatus, string> = {
+  PENDING: 'Đang tiếp nhận',
+  PROCESSING: 'Đang xử lý',
+  TRANSFERRED: 'Đã chuyển đơn vị',
+  RESOLVED: 'Đã giải quyết',
+};
+
+const typeLabels: Record<FeedbackType, string> = {
+  FIELD: 'Hiện trường',
+  SERVICE_ATTITUDE: 'Thái độ phục vụ',
+};
+
+const statusBadge = (status: FeedbackStatus) => {
+  if (status === 'RESOLVED') return 'badge-success';
+  if (status === 'PROCESSING') return 'badge-primary';
+  return 'badge-warning';
+};
+
+const formatDate = (value: string) => new Intl.DateTimeFormat('vi-VN', {
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+}).format(new Date(value));
 
 const FeedbackIndexPage: React.FC = () => {
   const navigate = useNavigate();
+  const snackbar = useSnackbar();
   const [activeTab, setActiveTab] = useState('mine');
-  
-  const feedbacks = useFeedbackStore(state => state.feedbacks);
-  const resolvedFeedbacks = useFeedbackStore(state => state.resolvedFeedbacks);
+  const [feedbacks, setFeedbacks] = useState<FeedbackItem[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  const list = activeTab === 'mine' ? feedbacks : resolvedFeedbacks;
+  const loadFeedbacks = async () => {
+    setLoading(true);
+    try {
+      const data = await apiCall<FeedbackItem[]>('/api/feedbacks/me?page=1&limit=50');
+      setFeedbacks(data);
+    } catch (err) {
+      snackbar.openSnackbar({ type: 'error', text: err instanceof Error ? err.message : 'Không thể tải danh sách phản ánh' });
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const pendingCount = feedbacks.filter(f => f.status === 'pending').length;
-  const processingCount = feedbacks.filter(f => f.status === 'processing').length;
-  const resolvedCount = resolvedFeedbacks.length;
+  useEffect(() => {
+    loadFeedbacks();
+  }, []);
+
+  const visibleFeedbacks = activeTab === 'resolved'
+    ? feedbacks.filter(item => item.status === 'RESOLVED')
+    : feedbacks.filter(item => item.status !== 'RESOLVED');
+
+  const pendingCount = feedbacks.filter(item => item.status === 'PENDING').length;
+  const processingCount = feedbacks.filter(item => item.status === 'PROCESSING').length;
+  const resolvedCount = feedbacks.filter(item => item.status === 'RESOLVED').length;
 
   return (
     <Page className="page" style={{ backgroundColor: 'var(--surface)', paddingBottom: '80px' }}>
-      <PageHeader title="Phản ánh hiện trường" />
+      <PageHeader title="Phản ánh, kiến nghị" />
 
       <Box style={{ paddingBottom: '160px' }}>
-        {/* Stats Banner */}
-        <div className="animate-fade-in-up" style={{
+        <div style={{
           margin: '12px 16px', padding: '16px 20px',
           background: 'var(--gradient-hero)',
           borderRadius: 'var(--radius-xl)',
@@ -37,94 +88,66 @@ const FeedbackIndexPage: React.FC = () => {
           boxShadow: 'var(--shadow-glow)'
         }}>
           {[
-            { count: pendingCount, label: 'Chờ xử lý', icon: '⏳' },
-            { count: processingCount, label: 'Đang xử lý', icon: '🔄' },
-            { count: resolvedCount, label: 'Đã xong', icon: '✅' },
-          ].map((stat) => (
+            { count: pendingCount, label: 'Chờ xử lý' },
+            { count: processingCount, label: 'Đang xử lý' },
+            { count: resolvedCount, label: 'Đã xong' },
+          ].map(stat => (
             <div key={stat.label} style={{ textAlign: 'center' }}>
-              <Text style={{ fontSize: '11px', marginBottom: '4px' }}>{stat.icon}</Text>
               <Text style={{ color: '#fff', fontWeight: 800, fontSize: '22px', lineHeight: '1' }}>{stat.count}</Text>
-              <Text style={{ color: 'rgba(255,255,255,0.75)', fontSize: '11px', fontWeight: 500, marginTop: '4px' }}>{stat.label}</Text>
+              <Text style={{ color: 'rgba(255,255,255,0.78)', fontSize: '11px', fontWeight: 600, marginTop: '4px' }}>{stat.label}</Text>
             </div>
           ))}
         </div>
 
         <Tabs id="feedback-tabs" activeKey={activeTab} onChange={(key) => setActiveTab(key as string)}>
-          <Tabs.Tab key="mine" label="Của tôi" />
+          <Tabs.Tab key="mine" label="Đang xử lý" />
           <Tabs.Tab key="resolved" label="Đã giải quyết" />
         </Tabs>
 
         <Box style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {list.map((item, idx) => {
-            const config = statusConfig[item.status] || statusConfig.pending;
-            return (
-              <div
-                key={item.id}
-                onClick={() => navigate('/feedback-detail', { state: { id: item.id } })}
-                className={`card active-scale animate-fade-in-up delay-${Math.min((idx + 1) * 50, 300)}`}
-                style={{
-                  display: 'flex', gap: '12px', padding: '14px',
-                  borderLeft: '4px solid transparent',
-                  borderImage: `${config.gradient} 1`,
-                  cursor: 'pointer'
-                }}
-              >
-                {item.thumb ? (
-                  <img src={item.thumb} alt={item.title} style={{
-                    width: '64px', height: '64px', objectFit: 'cover',
-                    borderRadius: 'var(--radius-md)', flexShrink: 0
-                  }} />
-                ) : (
-                  <div style={{
-                    width: '64px', height: '64px',
-                    borderRadius: 'var(--radius-md)', flexShrink: 0,
-                    background: 'var(--gradient-surface)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: '28px'
-                  }}>
-                    {config.icon}
-                  </div>
-                )}
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                    <Text style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 500 }}>{item.code}</Text>
-                    <div className={`badge badge-${item.status === 'resolved' ? 'success' : item.status === 'processing' ? 'primary' : 'warning'}`}>
-                      {item.statusText}
-                    </div>
-                  </div>
-                  <Text style={{
-                    fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '6px',
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
-                  }}>
-                    {item.title}
-                  </Text>
-                  <Text style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: 'auto' }}>{item.date}</Text>
+          {visibleFeedbacks.map((item, idx) => (
+            <div
+              key={item.id}
+              onClick={() => navigate('/feedback-detail', { state: { id: item.id } })}
+              className={`card active-scale animate-fade-in-up delay-${Math.min((idx + 1) * 50, 300)}`}
+              style={{ display: 'flex', gap: '12px', padding: '14px', cursor: 'pointer' }}
+            >
+              {item.imageUrls?.[0] ? (
+                <img src={item.imageUrls[0]} alt={item.title} style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 'var(--radius-md)', flexShrink: 0 }} />
+              ) : (
+                <div style={{ width: 64, height: 64, borderRadius: 'var(--radius-md)', flexShrink: 0, background: 'var(--gradient-surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, fontWeight: 800, color: 'var(--primary)' }}>
+                  {item.type === 'SERVICE_ATTITUDE' ? `${item.satisfactionScore || 0}*` : 'PA'}
                 </div>
+              )}
+              <div style={{ flex: 1, minWidth: 0, display: 'grid', gap: '5px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                  <Text style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>{item.code}</Text>
+                  <div className={`badge ${statusBadge(item.status)}`}>{statusLabels[item.status]}</div>
+                </div>
+                <Text style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</Text>
+                <Text style={{ fontSize: '12px', color: 'var(--primary)', fontWeight: 600 }}>{typeLabels[item.type]}</Text>
+                <Text style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{formatDate(item.createdAt)}</Text>
               </div>
-            );
-          })}
-          
-          {list.length === 0 && (
+            </div>
+          ))}
+
+          {!loading && visibleFeedbacks.length === 0 && (
             <Box style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: '40px' }}>
-              <div className="animate-float" style={{ fontSize: '56px', marginBottom: '16px', opacity: 0.4 }}>📭</div>
-              <Text style={{ color: 'var(--text-muted)', fontWeight: 500 }}>
-                {activeTab === 'mine' ? 'Bạn chưa có phản ánh nào' : 'Chưa có phản ánh đã giải quyết'}
-              </Text>
-              <Text style={{ color: 'var(--text-placeholder)', fontSize: '13px', marginTop: '4px' }}>
-                Nhấn nút + để tạo phản ánh mới
-              </Text>
+              <Text style={{ color: 'var(--text-muted)', fontWeight: 600 }}>Chưa có phản ánh nào</Text>
+              <Text style={{ color: 'var(--text-placeholder)', fontSize: '13px', marginTop: '4px' }}>Nhấn nút + để tạo phản ánh mới</Text>
             </Box>
           )}
+
+          {loading && <Text style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '24px 0' }}>Đang tải phản ánh...</Text>}
         </Box>
       </Box>
-      
-      {/* FAB */}
+
       <div
-        onClick={() => navigate('/feedback-create')}
+        onClick={() => navigate('/feedback-create', { state: { type: 'FIELD' } })}
         className="fab active-scale animate-bounce-in delay-300"
       >
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
-          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
         </svg>
       </div>
     </Page>

@@ -24,6 +24,7 @@ import adminQuizRoutes from './routes/adminQuiz.routes';
 import eventsRoutes from './routes/events.routes';
 import adminEventsRoutes from './routes/adminEvents.routes';
 import adminBookingRoutes from './routes/adminBooking.routes';
+import adminFeedbackRoutes from './routes/adminFeedback.routes';
 import adminAccountRoutes from './routes/adminAccount.routes';
 
 const app = express();
@@ -82,6 +83,7 @@ app.use('/api/events', publicQuizRateLimiter, eventsRoutes);
 app.use('/api/admin/quiz', adminQuizRateLimiter, adminQuizRoutes);
 app.use('/api/admin/events', adminQuizRateLimiter, adminEventsRoutes);
 app.use('/api/admin/bookings', adminBookingRateLimiter, adminBookingRoutes);
+app.use('/api/admin/feedbacks', adminBookingRateLimiter, adminFeedbackRoutes);
 app.use('/api/admin', adminQuizRateLimiter, adminAccountRoutes);
 
 // 8. 404 Handler

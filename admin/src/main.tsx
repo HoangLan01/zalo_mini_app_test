@@ -23,6 +23,7 @@ import {
   ListOrdered,
   LogOut,
   Image as ImageIcon,
+  MessageSquareWarning,
   Plus,
   Redo2,
   RefreshCw,
@@ -31,6 +32,7 @@ import {
   Settings,
   Shield,
   SlidersHorizontal,
+  Star,
   Trash2,
   TrendingUp,
   Underline as UnderlineIcon,
@@ -53,6 +55,7 @@ const API_URL = import.meta.env.VITE_API_URL || (
     : window.location.origin
 );
 const BOOKING_NOTIFICATION_READ_KEY = 'booking_notification_read_ids';
+const FEEDBACK_NOTIFICATION_READ_KEY = 'feedback_notification_read_ids';
 
 type ApiResponse<T> = { success: true; data: T } | { success: false; error: { code: string; message: string } };
 type Topic = { id: string; title: string; slug: string; description?: string; order: number; isActive: boolean; _count?: { sets: number } };
@@ -109,6 +112,40 @@ type BookingSummary = {
   pendingCount: number;
   byStatus: Partial<Record<BookingStatus, number>>;
 };
+type FeedbackType = 'FIELD' | 'SERVICE_ATTITUDE';
+type FeedbackStatus = 'PENDING' | 'PROCESSING' | 'TRANSFERRED' | 'RESOLVED';
+type FeedbackCategory = 'HA_TANG' | 'VE_SINH' | 'TRAT_TU' | 'AN_NINH' | 'KHAC';
+type ManagedFeedback = {
+  id: string;
+  code: string;
+  type: FeedbackType;
+  title: string;
+  category: FeedbackCategory;
+  serviceUnit?: string | null;
+  satisfactionScore?: number | null;
+  contactPhone?: string | null;
+  description: string;
+  imageUrls: string[];
+  latitude?: number | null;
+  longitude?: number | null;
+  address?: string | null;
+  status: FeedbackStatus;
+  response?: string | null;
+  respondedAt?: string | null;
+  createdAt: string;
+  updatedAt?: string;
+  user?: { id: string; displayName: string; avatarUrl?: string | null; zaloId?: string | null };
+};
+type FeedbackListResponse = {
+  items: ManagedFeedback[];
+  pagination: { page: number; limit: number; total: number; totalPages: number };
+};
+type FeedbackSummary = {
+  total: number;
+  pendingCount: number;
+  byStatus: Partial<Record<FeedbackStatus, number>>;
+  byType: Partial<Record<FeedbackType, number>>;
+};
 type QuizSet = {
   id: string;
   topicId: string;
@@ -141,7 +178,7 @@ type Stats = {
 type AdminUser = { id: string; displayName: string; email: string; role: 'ADMIN' | 'SUPER_ADMIN'; status: 'ACTIVE' | 'DISABLED'; mustChangePassword: boolean; lastLoginAt?: string | null };
 type ManagedAdmin = AdminUser & { createdAt: string; updatedAt: string; createdBy?: { displayName: string; email: string } | null };
 type AdminAuditLog = { id: string; action: string; entityType: string; entityId?: string | null; metadata?: unknown; ipAddress?: string | null; createdAt: string; actor: { displayName: string; email: string } };
-type ViewMode = 'dashboard' | 'bank' | 'create' | 'guide' | 'events' | 'bookings' | 'news' | 'procedures' | 'users' | 'admins' | 'settings';
+type ViewMode = 'dashboard' | 'bank' | 'create' | 'guide' | 'events' | 'bookings' | 'feedbacks' | 'news' | 'procedures' | 'users' | 'admins' | 'settings';
 const VIEW_CONFIG: Record<ViewMode, { title: string; section: string; label: string }> = {
   dashboard: { title: 'Tổng quan', section: 'Hệ thống', label: 'Tổng quan hệ thống' },
   bank: { title: 'Ngân hàng câu hỏi', section: 'Kiến thức Chuyển đổi số', label: 'Quản lý câu hỏi' },
@@ -149,6 +186,7 @@ const VIEW_CONFIG: Record<ViewMode, { title: string; section: string; label: str
   guide: { title: 'Hướng dẫn sử dụng', section: 'Hệ thống', label: 'Hướng dẫn sử dụng' },
   events: { title: 'Quản lý sự kiện', section: 'Quản lý nội dung', label: 'Sự kiện' },
   bookings: { title: 'Quản lý lịch hẹn', section: 'Nghiệp vụ', label: 'Lịch hẹn' },
+  feedbacks: { title: 'Phản ánh, kiến nghị', section: 'Nghiệp vụ', label: 'Phản ánh, kiến nghị' },
   news: { title: 'Tin tức & Sự kiện', section: 'Quản lý nội dung', label: 'Tin tức & Sự kiện' },
   procedures: { title: 'Thủ tục hành chính', section: 'Quản lý nội dung', label: 'Thủ tục hành chính' },
   users: { title: 'Quản lý người dùng', section: 'Hệ thống', label: 'Người dùng' },
@@ -447,6 +485,7 @@ const getViewFromLocation = (): ViewMode => {
   if (v === 'bank') return 'bank';
   if (v === 'events') return 'events';
   if (v === 'bookings') return 'bookings';
+  if (v === 'feedbacks') return 'feedbacks';
   if (v === 'news') return 'news';
   if (v === 'procedures') return 'procedures';
   if (v === 'users') return 'users';
@@ -477,6 +516,20 @@ const loadReadBookingNotificationIds = () => {
 
 const saveBookingNotificationIds = (ids: string[]) => {
   localStorage.setItem(BOOKING_NOTIFICATION_READ_KEY, JSON.stringify(Array.from(new Set(ids))));
+};
+
+const loadReadFeedbackNotificationIds = () => {
+  try {
+    const raw = localStorage.getItem(FEEDBACK_NOTIFICATION_READ_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : [];
+  } catch {
+    return [];
+  }
+};
+
+const saveFeedbackNotificationIds = (ids: string[]) => {
+  localStorage.setItem(FEEDBACK_NOTIFICATION_READ_KEY, JSON.stringify(Array.from(new Set(ids))));
 };
 
 function Login({ onLogin }: { onLogin: (user: AdminUser) => void }) {
@@ -588,6 +641,9 @@ function Dashboard({ user, onLogout }: { user: AdminUser; onLogout: () => void }
   const [bookingSummary, setBookingSummary] = useState<BookingSummary>({ total: 0, pendingCount: 0, byStatus: {} });
   const [bookingNotifications, setBookingNotifications] = useState<ManagedBooking[]>([]);
   const [readBookingNotificationIds, setReadBookingNotificationIds] = useState<string[]>(() => loadReadBookingNotificationIds());
+  const [feedbackSummary, setFeedbackSummary] = useState<FeedbackSummary>({ total: 0, pendingCount: 0, byStatus: {}, byType: {} });
+  const [feedbackNotifications, setFeedbackNotifications] = useState<ManagedFeedback[]>([]);
+  const [readFeedbackNotificationIds, setReadFeedbackNotificationIds] = useState<string[]>(() => loadReadFeedbackNotificationIds());
 
   const selectedSet = useMemo(() => sets.find(item => item.id === selectedSetId), [sets, selectedSetId]);
   const filteredSets = useMemo(
@@ -605,6 +661,10 @@ function Dashboard({ user, onLogout }: { user: AdminUser; onLogout: () => void }
   const unreadBookingCount = useMemo(
     () => bookingNotifications.filter(item => !readBookingNotificationIds.includes(item.id)).length,
     [bookingNotifications, readBookingNotificationIds]
+  );
+  const unreadFeedbackCount = useMemo(
+    () => feedbackNotifications.filter(item => !readFeedbackNotificationIds.includes(item.id)).length,
+    [feedbackNotifications, readFeedbackNotificationIds]
   );
   const isQuizView = ['bank', 'create'].includes(view);
 
@@ -644,11 +704,45 @@ function Dashboard({ user, onLogout }: { user: AdminUser; onLogout: () => void }
     });
   }, []);
 
+  const applyFeedbackSummary = useCallback((nextSummary: FeedbackSummary) => {
+    setFeedbackSummary(prev => {
+      const statusKeys = new Set([...Object.keys(prev.byStatus), ...Object.keys(nextSummary.byStatus)]);
+      const typeKeys = new Set([...Object.keys(prev.byType), ...Object.keys(nextSummary.byType)]);
+      const sameStatusCounts = Array.from(statusKeys).every(key =>
+        (prev.byStatus[key as FeedbackStatus] || 0) === (nextSummary.byStatus[key as FeedbackStatus] || 0)
+      );
+      const sameTypeCounts = Array.from(typeKeys).every(key =>
+        (prev.byType[key as FeedbackType] || 0) === (nextSummary.byType[key as FeedbackType] || 0)
+      );
+      if (prev.total === nextSummary.total && prev.pendingCount === nextSummary.pendingCount && sameStatusCounts && sameTypeCounts) {
+        return prev;
+      }
+      return nextSummary;
+    });
+  }, []);
+
+  const applyFeedbackNotifications = useCallback((nextItems: ManagedFeedback[]) => {
+    setFeedbackNotifications(prev => {
+      const prevSignature = prev.map(item => `${item.id}:${item.status}:${item.updatedAt || item.createdAt}`).join('|');
+      const nextSignature = nextItems.map(item => `${item.id}:${item.status}:${item.updatedAt || item.createdAt}`).join('|');
+      return prevSignature === nextSignature ? prev : nextItems;
+    });
+  }, []);
+
   const markBookingNotificationRead = useCallback((bookingId: string) => {
     setReadBookingNotificationIds(prev => {
       if (prev.includes(bookingId)) return prev;
       const next = [...prev, bookingId];
       saveBookingNotificationIds(next);
+      return next;
+    });
+  }, []);
+
+  const markFeedbackNotificationRead = useCallback((feedbackId: string) => {
+    setReadFeedbackNotificationIds(prev => {
+      if (prev.includes(feedbackId)) return prev;
+      const next = [...prev, feedbackId];
+      saveFeedbackNotificationIds(next);
       return next;
     });
   }, []);
@@ -707,6 +801,16 @@ function Dashboard({ user, onLogout }: { user: AdminUser; onLogout: () => void }
     applyBookingNotifications(data.items);
   }, [applyBookingNotifications]);
 
+  const loadFeedbackSummary = useCallback(async () => {
+    const data = await api<FeedbackSummary>('/api/admin/feedbacks/summary');
+    applyFeedbackSummary(data);
+  }, [applyFeedbackSummary]);
+
+  const loadFeedbackNotifications = useCallback(async () => {
+    const data = await api<FeedbackListResponse>('/api/admin/feedbacks?status=PENDING&limit=10');
+    applyFeedbackNotifications(data.items);
+  }, [applyFeedbackNotifications]);
+
   const refreshAll = async () => {
     setLoading(true);
     try {
@@ -727,16 +831,17 @@ function Dashboard({ user, onLogout }: { user: AdminUser; onLogout: () => void }
   }, [isQuizView]);
 
   useEffect(() => {
-    const loadBookingHeader = () => view === 'bookings'
-      ? loadBookingNotifications()
-      : Promise.all([loadBookingSummary(), loadBookingNotifications()]);
+    const loadHeader = () => Promise.all([
+      view === 'bookings' ? loadBookingNotifications() : Promise.all([loadBookingSummary(), loadBookingNotifications()]),
+      view === 'feedbacks' ? loadFeedbackNotifications() : Promise.all([loadFeedbackSummary(), loadFeedbackNotifications()])
+    ]);
 
-    loadBookingHeader().catch(err => showMessage(err instanceof Error ? err.message : 'Khong the tai thong bao lich hen', 'error'));
+    loadHeader().catch(err => showMessage(err instanceof Error ? err.message : 'Không thể tải thông báo', 'error'));
     const timer = window.setInterval(() => {
-      if (!document.hidden) loadBookingHeader().catch(() => undefined);
+      if (!document.hidden) loadHeader().catch(() => undefined);
     }, 60000);
     return () => window.clearInterval(timer);
-  }, [loadBookingNotifications, loadBookingSummary, showMessage, view]);
+  }, [loadBookingNotifications, loadBookingSummary, loadFeedbackNotifications, loadFeedbackSummary, showMessage, view]);
 
   useEffect(() => {
     if (view === 'dashboard') {
@@ -858,11 +963,15 @@ function Dashboard({ user, onLogout }: { user: AdminUser; onLogout: () => void }
       onCloneClick={() => openModal('SET_CLONE')}
       onCloseClick={() => openModal('SET_CLOSE')}
       onPublishClick={() => openModal('SET_PUBLISH')}
-      pendingBookingCount={unreadBookingCount}
+      pendingNotificationCount={unreadBookingCount + unreadFeedbackCount}
       bookingNotifications={bookingNotifications}
       readBookingNotificationIds={readBookingNotificationIds}
       onBookingNotificationRead={markBookingNotificationRead}
       onReloadBookingNotifications={loadBookingNotifications}
+      feedbackNotifications={feedbackNotifications}
+      readFeedbackNotificationIds={readFeedbackNotificationIds}
+      onFeedbackNotificationRead={markFeedbackNotificationRead}
+      onReloadFeedbackNotifications={loadFeedbackNotifications}
     >
       {message && <Notice tone={messageTone} message={message} onClose={() => setMessage('')} />}
       
@@ -931,6 +1040,8 @@ function Dashboard({ user, onLogout }: { user: AdminUser; onLogout: () => void }
         <EventManagementView showMessage={showMessage} />
       ) : view === 'bookings' ? (
         <BookingManagementView showMessage={showMessage} onSummaryChange={applyBookingSummary} />
+      ) : view === 'feedbacks' ? (
+        <FeedbackManagementView showMessage={showMessage} onSummaryChange={applyFeedbackSummary} />
       ) : view === 'admins' && user.role === 'SUPER_ADMIN' ? (
         <AdminManagementView currentUser={user} showMessage={showMessage} />
       ) : ['news', 'procedures', 'users', 'settings'].includes(view) ? (
@@ -988,11 +1099,15 @@ function AdminShell({
   onCloneClick,
   onCloseClick,
   onPublishClick,
-  pendingBookingCount,
+  pendingNotificationCount,
   bookingNotifications,
   readBookingNotificationIds,
   onBookingNotificationRead,
-  onReloadBookingNotifications
+  onReloadBookingNotifications,
+  feedbackNotifications,
+  readFeedbackNotificationIds,
+  onFeedbackNotificationRead,
+  onReloadFeedbackNotifications
 }: {
   children: React.ReactNode;
   user: AdminUser;
@@ -1003,11 +1118,15 @@ function AdminShell({
   onCloneClick?: () => void;
   onCloseClick?: () => void;
   onPublishClick?: () => void;
-  pendingBookingCount: number;
+  pendingNotificationCount: number;
   bookingNotifications: ManagedBooking[];
   readBookingNotificationIds: string[];
   onBookingNotificationRead: (bookingId: string) => void;
   onReloadBookingNotifications: () => Promise<void>;
+  feedbackNotifications: ManagedFeedback[];
+  readFeedbackNotificationIds: string[];
+  onFeedbackNotificationRead: (feedbackId: string) => void;
+  onReloadFeedbackNotifications: () => Promise<void>;
 }) {
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const notificationButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -1027,17 +1146,25 @@ function AdminShell({
 
   const unreadNotifications = bookingNotifications.filter(item => !readBookingNotificationIds.includes(item.id));
   const readNotifications = bookingNotifications.filter(item => readBookingNotificationIds.includes(item.id));
-  const orderedNotifications = [...unreadNotifications, ...readNotifications];
+  const unreadFeedbackNotifications = feedbackNotifications.filter(item => !readFeedbackNotificationIds.includes(item.id));
+  const readFeedbackNotifications = feedbackNotifications.filter(item => readFeedbackNotificationIds.includes(item.id));
+  const orderedBookingNotifications = [...unreadNotifications, ...readNotifications];
+  const orderedFeedbackNotifications = [...unreadFeedbackNotifications, ...readFeedbackNotifications];
 
   const openNotifications = () => {
     setIsNotificationOpen(open => !open);
-    onReloadBookingNotifications().catch(() => undefined);
+    Promise.all([onReloadBookingNotifications(), onReloadFeedbackNotifications()]).catch(() => undefined);
   };
 
   const selectNotification = (bookingId: string) => {
     onBookingNotificationRead(bookingId);
     setIsNotificationOpen(false);
     onNavigate('bookings');
+  };
+  const selectFeedbackNotification = (feedbackId: string) => {
+    onFeedbackNotificationRead(feedbackId);
+    setIsNotificationOpen(false);
+    onNavigate('feedbacks');
   };
   const viewConfig = VIEW_CONFIG[view];
   return (
@@ -1067,6 +1194,9 @@ function AdminShell({
           </button>
           <button className={view === 'bookings' ? 'nav-item active' : 'nav-item'} onClick={() => onNavigate('bookings')}>
             <Clock size={20} /> Lịch hẹn
+          </button>
+          <button className={view === 'feedbacks' ? 'nav-item active' : 'nav-item'} onClick={() => onNavigate('feedbacks')}>
+            <MessageSquareWarning size={20} /> Phản ánh, kiến nghị
           </button>
           <button className={view === 'procedures' ? 'nav-item active' : 'nav-item'} onClick={() => onNavigate('procedures')}>
             <ClipboardList size={20} /> Thủ tục hành chính
@@ -1128,28 +1258,46 @@ function AdminShell({
           <div className="topbar-actions">
             <button
               ref={notificationButtonRef}
-              className={pendingBookingCount > 0 ? 'icon-button notify has-alert' : 'icon-button notify'}
-              aria-label="Thông báo lịch hẹn"
+              className={pendingNotificationCount > 0 ? 'icon-button notify has-alert' : 'icon-button notify'}
+              aria-label="Thông báo"
               aria-expanded={isNotificationOpen}
               onClick={openNotifications}
-              title="Lịch hẹn chờ xử lý"
+              title="Thông báo chờ xử lý"
             >
               <Bell size={21} />
-              {pendingBookingCount > 0 && <span className="notify-badge">{pendingBookingCount > 99 ? '99+' : pendingBookingCount}</span>}
+              {pendingNotificationCount > 0 && <span className="notify-badge">{pendingNotificationCount > 99 ? '99+' : pendingNotificationCount}</span>}
             </button>
             {isNotificationOpen && (
-              <div className="notification-popover" role="dialog" aria-label="Thông báo lịch hẹn" ref={notificationPopoverRef}>
+              <div className="notification-popover" role="dialog" aria-label="Thông báo" ref={notificationPopoverRef}>
                 <div className="notification-popover-header">
-                  <strong>Thông báo lịch hẹn</strong>
-                  <span>{pendingBookingCount} chưa xem</span>
+                  <strong>Thông báo chờ xử lý</strong>
+                  <span>{pendingNotificationCount} chưa xem</span>
                 </div>
-                {orderedNotifications.length > 0 ? (
+                {orderedBookingNotifications.length > 0 || orderedFeedbackNotifications.length > 0 ? (
                   <div className="notification-list">
-                    {orderedNotifications.map(item => {
+                    {orderedFeedbackNotifications.map(item => {
+                      const isRead = readFeedbackNotificationIds.includes(item.id);
+                      return (
+                        <button
+                          key={`feedback-${item.id}`}
+                          type="button"
+                          className={isRead ? 'notification-item read' : 'notification-item unread'}
+                          onClick={() => selectFeedbackNotification(item.id)}
+                        >
+                          <span className="notification-dot" aria-hidden="true" />
+                          <span className="notification-body">
+                            <strong>{item.code} - {item.user?.displayName || 'Người gửi'}</strong>
+                            <small>{feedbackTypeLabel(item.type)} · {item.title}</small>
+                            <em>{isRead ? 'Đã xem' : 'Phản ánh mới'}</em>
+                          </span>
+                        </button>
+                      );
+                    })}
+                    {orderedBookingNotifications.map(item => {
                       const isRead = readBookingNotificationIds.includes(item.id);
                       return (
                         <button
-                          key={item.id}
+                          key={`booking-${item.id}`}
                           type="button"
                           className={isRead ? 'notification-item read' : 'notification-item unread'}
                           onClick={() => selectNotification(item.id)}
@@ -1165,7 +1313,7 @@ function AdminShell({
                     })}
                   </div>
                 ) : (
-                  <div className="notification-empty">Chưa có lịch hẹn chờ xử lý</div>
+                  <div className="notification-empty">Chưa có thông báo chờ xử lý</div>
                 )}
               </div>
             )}
@@ -1542,6 +1690,35 @@ const bookingStatusLabel = (status: BookingStatus) => {
   return labels[status] || status;
 };
 
+const feedbackTypeLabel = (type: FeedbackType) => {
+  const labels: Record<FeedbackType, string> = {
+    FIELD: 'Hiện trường',
+    SERVICE_ATTITUDE: 'Thái độ phục vụ'
+  };
+  return labels[type] || type;
+};
+
+const feedbackCategoryLabel = (category: FeedbackCategory) => {
+  const labels: Record<FeedbackCategory, string> = {
+    HA_TANG: 'Hạ tầng - Đường sá',
+    VE_SINH: 'Vệ sinh môi trường',
+    TRAT_TU: 'Trật tự đô thị',
+    AN_NINH: 'An ninh - Trật tự',
+    KHAC: 'Vấn đề khác'
+  };
+  return labels[category] || category;
+};
+
+const feedbackStatusLabel = (status: FeedbackStatus) => {
+  const labels: Record<FeedbackStatus, string> = {
+    PENDING: 'Chờ xử lý',
+    PROCESSING: 'Đang xử lý',
+    TRANSFERRED: 'Đã chuyển đơn vị',
+    RESOLVED: 'Đã hoàn tất'
+  };
+  return labels[status] || status;
+};
+
 const toDateInputValue = (value?: string | null) => {
   if (!value) return '';
   return new Date(value).toISOString().slice(0, 10);
@@ -1555,6 +1732,212 @@ const formatBookingDate = (date: string, time?: string | null) => {
   }).format(new Date(date));
   return time ? `${formatted} - ${time}` : formatted;
 };
+
+function FeedbackManagementView({
+  showMessage,
+  onSummaryChange
+}: {
+  showMessage: (text: string, tone?: 'info' | 'error') => void;
+  onSummaryChange: (summary: FeedbackSummary) => void;
+}) {
+  const [feedbacks, setFeedbacks] = useState<ManagedFeedback[]>([]);
+  const [summary, setSummary] = useState<FeedbackSummary>({ total: 0, pendingCount: 0, byStatus: {}, byType: {} });
+  const [typeFilter, setTypeFilter] = useState('ALL');
+  const [statusFilter, setStatusFilter] = useState('PENDING');
+  const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [resolveFeedback, setResolveFeedback] = useState<ManagedFeedback | null>(null);
+  const [response, setResponse] = useState('');
+
+  const loadSummary = useCallback(async () => {
+    const data = await api<FeedbackSummary>('/api/admin/feedbacks/summary');
+    setSummary(data);
+    onSummaryChange(data);
+  }, [onSummaryChange]);
+
+  const loadFeedbacks = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (typeFilter !== 'ALL') params.set('type', typeFilter);
+      if (statusFilter !== 'ALL') params.set('status', statusFilter);
+      if (search.trim()) params.set('search', search.trim());
+      params.set('limit', '50');
+      const data = await api<FeedbackListResponse>(`/api/admin/feedbacks?${params.toString()}`);
+      setFeedbacks(data.items);
+      await loadSummary();
+    } catch (err) {
+      showMessage(err instanceof Error ? err.message : 'Không thể tải phản ánh', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [loadSummary, search, showMessage, statusFilter, typeFilter]);
+
+  useEffect(() => {
+    loadFeedbacks();
+  }, [loadFeedbacks]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (!document.hidden) loadFeedbacks().catch(() => undefined);
+    }, 60000);
+    return () => window.clearInterval(timer);
+  }, [loadFeedbacks]);
+
+  const updateStatus = async (feedbackId: string, payload: { status: 'PROCESSING' | 'RESOLVED'; response?: string }) => {
+    await api(`/api/admin/feedbacks/${feedbackId}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload)
+    });
+    await loadFeedbacks();
+  };
+
+  const markProcessing = async (feedback: ManagedFeedback) => {
+    try {
+      await updateStatus(feedback.id, { status: 'PROCESSING' });
+      showMessage('Đã chuyển phản ánh sang đang xử lý');
+    } catch (err) {
+      showMessage(err instanceof Error ? err.message : 'Không thể cập nhật phản ánh', 'error');
+    }
+  };
+
+  const openResolveModal = (feedback: ManagedFeedback) => {
+    setResolveFeedback(feedback);
+    setResponse(feedback.response || '');
+  };
+
+  const closeResolveModal = () => {
+    if (submitting) return;
+    setResolveFeedback(null);
+    setResponse('');
+  };
+
+  const submitResolve = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!resolveFeedback) return;
+    if (!response.trim()) {
+      showMessage('Vui lòng nhập phản hồi khi hoàn tất phản ánh', 'error');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await updateStatus(resolveFeedback.id, { status: 'RESOLVED', response: response.trim() });
+      showMessage('Đã hoàn tất phản ánh');
+      closeResolveModal();
+    } catch (err) {
+      showMessage(err instanceof Error ? err.message : 'Không thể hoàn tất phản ánh', 'error');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const statItems = [
+    { label: 'Tổng phản ánh', value: summary.total.toLocaleString('vi-VN'), icon: MessageSquareWarning, accent: 'blue' },
+    { label: 'Chờ xử lý', value: (summary.byStatus.PENDING || 0).toLocaleString('vi-VN'), icon: Clock, accent: 'orange' },
+    { label: 'Đang xử lý', value: (summary.byStatus.PROCESSING || 0).toLocaleString('vi-VN'), icon: RefreshCw, accent: 'purple' },
+    { label: 'Đã hoàn tất', value: (summary.byStatus.RESOLVED || 0).toLocaleString('vi-VN'), icon: CheckCircle, accent: 'green' }
+  ] as const;
+
+  return (
+    <div className="event-management-layout">
+      <section className="main-column">
+        <div className="stats-grid">
+          {statItems.map(stat => <StatCard key={stat.label} {...stat} />)}
+        </div>
+
+        <div className="toolbar glass-card">
+          <div className="search-box">
+            <Search size={20} />
+            <input value={search} onChange={event => setSearch(event.target.value)} placeholder="Tìm mã, tiêu đề, nội dung, người gửi, SĐT, đơn vị..." />
+          </div>
+          <div className="filter-group">
+            <ListFilter size={20} />
+            <Select value={typeFilter} onChange={setTypeFilter} ariaLabel="Lọc loại phản ánh">
+              <option value="ALL">Tất cả loại</option>
+              <option value="FIELD">Hiện trường</option>
+              <option value="SERVICE_ATTITUDE">Thái độ phục vụ</option>
+            </Select>
+            <Select value={statusFilter} onChange={setStatusFilter} ariaLabel="Lọc trạng thái phản ánh">
+              <option value="ALL">Tất cả trạng thái</option>
+              <option value="PENDING">Chờ xử lý</option>
+              <option value="PROCESSING">Đang xử lý</option>
+              <option value="RESOLVED">Đã hoàn tất</option>
+            </Select>
+          </div>
+          <button className="text-button" onClick={loadFeedbacks} disabled={loading}><RefreshCw size={17} /> Làm mới</button>
+        </div>
+
+        <section className="table-card glass-card">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Phản ánh</p>
+              <h2>Danh sách phản ánh, kiến nghị</h2>
+            </div>
+          </div>
+
+          {feedbacks.length > 0 ? (
+            <>
+              <div className="question-table feedback-table">
+                <div className="table-row table-head">
+                  <span>Phản ánh</span>
+                  <span>Người gửi</span>
+                  <span>Ảnh / đánh giá</span>
+                  <span>Trạng thái</span>
+                  <span>Thao tác</span>
+                </div>
+                {feedbacks.map(item => (
+                  <div className="table-row" key={item.id}>
+                    <div className="question-cell">
+                      <strong>{item.code} - {feedbackTypeLabel(item.type)}</strong>
+                      <small>{item.title}</small>
+                      <small>{item.type === 'SERVICE_ATTITUDE' ? item.serviceUnit || 'Chưa có đơn vị' : feedbackCategoryLabel(item.category)}</small>
+                      <small>{item.description}</small>
+                    </div>
+                    <div className="booking-contact">
+                      <strong>{item.user?.displayName || 'Người gửi'}</strong>
+                      <span>{item.contactPhone || 'Chưa có SĐT'}</span>
+                      <span>{formatDateTime(item.createdAt)}</span>
+                    </div>
+                    <div className="feedback-media">
+                      {item.type === 'SERVICE_ATTITUDE' ? (
+                        <span className="feedback-stars"><Star size={16} /> {item.satisfactionScore || 0}/5</span>
+                      ) : item.imageUrls?.[0] ? (
+                        <img src={item.imageUrls[0]} alt={item.title} />
+                      ) : (
+                        <span className="chip">Không có ảnh</span>
+                      )}
+                    </div>
+                    <span className={`status-badge status-${item.status.toLowerCase()}`}>{feedbackStatusLabel(item.status)}</span>
+                    <div className="row-actions">
+                      {item.status === 'PENDING' && <button className="icon-button" onClick={() => markProcessing(item)} aria-label="Chuyển xử lý"><RefreshCw size={18} /></button>}
+                      {item.status !== 'RESOLVED' && <button className="icon-button" onClick={() => openResolveModal(item)} aria-label="Hoàn tất"><CheckCircle size={18} /></button>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="table-footer">
+                <span>Hiển thị {feedbacks.length} phản ánh</span>
+              </div>
+            </>
+          ) : <EmptyState title="Chưa có phản ánh" description="Các phản ánh, kiến nghị từ Mini App sẽ hiển thị tại đây." />}
+        </section>
+      </section>
+
+      <Modal isOpen={Boolean(resolveFeedback)} onClose={closeResolveModal} title="Hoàn tất phản ánh">
+        <form className="stack-form" onSubmit={submitResolve}>
+          <label>Phản hồi gửi người dân
+            <textarea required value={response} onChange={event => setResponse(event.target.value)} />
+          </label>
+          <div className="modal-footer">
+            <button type="button" className="secondary-button" onClick={closeResolveModal}>Hủy</button>
+            <button type="submit" className="primary-button" disabled={submitting}>Hoàn tất</button>
+          </div>
+        </form>
+      </Modal>
+    </div>
+  );
+}
 
 function BookingManagementView({
   showMessage,

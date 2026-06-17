@@ -167,6 +167,14 @@ export const getFieldLabel = (field: BookingField): string => {
   return map[field];
 };
 
+export const getFeedbackTypeLabel = (type: string): string => {
+  const map: Record<string, string> = {
+    FIELD: 'Phản ánh hiện trường',
+    SERVICE_ATTITUDE: 'Phản ánh thái độ phục vụ'
+  };
+  return map[type] || type;
+};
+
 export const sendFeedbackToOA = async (feedback: Feedback, user: User): Promise<string | null> => {
   const message = {
     attachment: {
@@ -210,6 +218,42 @@ export const sendFeedbackToOA = async (feedback: Feedback, user: User): Promise<
 
   if (!user.zaloId) return null;
   return sendMessageToUser(user.zaloId, message);
+};
+
+export const sendFeedbackAdminAlert = async (feedback: Feedback, user: User): Promise<string | null> => {
+  const adminIds = (process.env.ZALO_FEEDBACK_ADMIN_USER_IDS || '')
+    .split(',')
+    .map(id => id.trim())
+    .filter(Boolean);
+
+  if (adminIds.length === 0) {
+    logger.warn('Missing ZALO_FEEDBACK_ADMIN_USER_IDS env var, cannot send feedback admin alert');
+    return null;
+  }
+
+  const serviceInfo = feedback.type === 'SERVICE_ATTITUDE'
+    ? `Đơn vị: ${feedback.serviceUnit || 'Không có'}\nMức độ hài lòng: ${feedback.satisfactionScore || 0}/5 sao`
+    : `Danh mục: ${getCategoryLabel(feedback.category)}\nĐịa điểm: ${feedback.address || (feedback.latitude != null && feedback.longitude != null ? `${feedback.latitude}, ${feedback.longitude}` : 'Không có')}`;
+
+  const textContent =
+    `PHẢN ÁNH/KIẾN NGHỊ MỚI
+Mã: ${feedback.code}
+Loại: ${getFeedbackTypeLabel(feedback.type)}
+Người gửi: ${user.displayName}
+SĐT: ${feedback.contactPhone || 'Không có'}
+${serviceInfo}
+Tiêu đề: ${feedback.title}
+Nội dung: ${feedback.description}
+
+Vui lòng mở trang admin để xử lý.`;
+
+  const messageIds = await Promise.all(adminIds.map(async adminId => {
+    const messageId = await sendMessageToUser(adminId, { text: textContent });
+    if (!messageId) logger.warn('Failed to send feedback admin alert', { adminId, feedbackId: feedback.id });
+    return messageId;
+  }));
+
+  return messageIds.find(Boolean) || null;
 };
 
 export const sendBookingToOA = async (booking: Booking, user: User): Promise<string | null> => {

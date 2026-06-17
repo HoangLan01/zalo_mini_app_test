@@ -1,22 +1,50 @@
 import React, { useState } from 'react';
-import { Page, Box, Text, Input, Select, Button, useSnackbar } from 'zmp-ui';
-import { useNavigate } from 'zmp-ui';
+import { Page, Box, Text, Input, Select, useLocation, useNavigate, useSnackbar } from 'zmp-ui';
 import { getLocation, chooseImage, authorize } from 'zmp-sdk/apis';
 import PageHeader from '@/components/PageHeader';
-import { useFeedbackStore } from '@/store/feedbackStore';
+import { apiCall, uploadFeedbackImages } from '@/services/api';
+
+type FeedbackType = 'FIELD' | 'SERVICE_ATTITUDE';
+type FeedbackCategory = 'HA_TANG' | 'VE_SINH' | 'TRAT_TU' | 'AN_NINH' | 'KHAC';
+
+const categoryOptions: Array<{ value: FeedbackCategory; label: string }> = [
+  { value: 'HA_TANG', label: 'Hạ tầng - Đường sá' },
+  { value: 'VE_SINH', label: 'Vệ sinh môi trường' },
+  { value: 'TRAT_TU', label: 'Trật tự đô thị' },
+  { value: 'AN_NINH', label: 'An ninh - Trật tự' },
+  { value: 'KHAC', label: 'Vấn đề khác' },
+];
+
+const serviceUnits = [
+  'Tư pháp hộ tịch',
+  'Tư pháp chứng thực',
+  'Lao động TBXH',
+  'Văn hóa thông tin',
+  'Tài nguyên môi trường',
+  'Đô thị xây dựng',
+  'Văn phòng',
+  'Công an phường',
+  'Quân sự phường',
+];
 
 const FeedbackCreatePage: React.FC = () => {
   const navigate = useNavigate();
   const snackbar = useSnackbar();
-  const addFeedback = useFeedbackStore(state => state.addFeedback);
-  
+  const { state } = useLocation();
+  const type = ((state as { type?: FeedbackType } | undefined)?.type || 'FIELD') as FeedbackType;
+
   const [title, setTitle] = useState('');
-  const [category, setCategory] = useState('');
-  const [desc, setDesc] = useState('');
+  const [category, setCategory] = useState<FeedbackCategory | ''>('');
+  const [description, setDescription] = useState('');
+  const [serviceUnit, setServiceUnit] = useState('');
+  const [satisfactionScore, setSatisfactionScore] = useState(0);
+  const [contactPhone, setContactPhone] = useState('');
   const [images, setImages] = useState<string[]>([]);
-  const [locationObj, setLocationObj] = useState<any>(null);
+  const [locationObj, setLocationObj] = useState<{ latitude: number; longitude: number } | null>(null);
   const [loadingLocation, setLoadingLocation] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  const isServiceAttitude = type === 'SERVICE_ATTITUDE';
 
   const fetchLocation = async () => {
     setLoadingLocation(true);
@@ -24,7 +52,7 @@ const FeedbackCreatePage: React.FC = () => {
       await authorize({ scopes: ['scope.userLocation'] });
       const { latitude, longitude } = await getLocation({});
       setLocationObj({ latitude, longitude });
-    } catch (e) {
+    } catch {
       snackbar.openSnackbar({ type: 'error', text: 'Không thể lấy vị trí. Vui lòng cho phép quyền truy cập vị trí.' });
     } finally {
       setLoadingLocation(false);
@@ -33,246 +61,209 @@ const FeedbackCreatePage: React.FC = () => {
 
   const handlePickImages = async () => {
     try {
-      const { filePaths } = await chooseImage({ count: 3, sourceType: ['album', 'camera'] });
+      const { filePaths } = await chooseImage({ count: 3 - images.length, sourceType: ['album', 'camera'] });
       setImages([...images, ...filePaths].slice(0, 3));
-    } catch (e) {
-      console.log(e);
+    } catch {
+      // User cancelled the picker.
     }
   };
 
-  const handleSubmit = () => {
-    if (title.length < 10) {
-      snackbar.openSnackbar({ type: 'warning', text: 'Tiêu đề cần tối thiểu 10 ký tự' });
-      return;
+  const validate = () => {
+    if (!/^\d{10,11}$/.test(contactPhone.trim())) return 'Số điện thoại không hợp lệ';
+
+    if (isServiceAttitude) {
+      if (!serviceUnit.trim()) return 'Vui lòng chọn đơn vị';
+      if (satisfactionScore < 1 || satisfactionScore > 5) return 'Vui lòng chọn mức đánh giá từ 1-5 sao';
+      if (!description.trim()) return 'Vui lòng nhập nội dung phản ánh';
+      return '';
     }
-    if (!category || desc.length < 20) {
-      snackbar.openSnackbar({ type: 'warning', text: 'Vui lòng chọn danh mục và nhập mô tả chi tiết' });
+
+    if (title.trim().length < 10) return 'Tiêu đề cần tối thiểu 10 ký tự';
+    if (!category) return 'Vui lòng chọn danh mục';
+    if (description.trim().length < 20) return 'Mô tả cần tối thiểu 20 ký tự';
+    return '';
+  };
+
+  const handleSubmit = async () => {
+    const error = validate();
+    if (error) {
+      snackbar.openSnackbar({ type: 'warning', text: error });
       return;
     }
 
     setSubmitting(true);
-    setTimeout(() => {
-      setSubmitting(false);
-      
-      const newFeedback = {
-        id: Math.random().toString(36).substr(2, 9),
-        code: `PA-2026-${Math.floor(1000 + Math.random() * 9000)}`,
-        title,
-        status: 'pending',
-        statusText: 'Đang tiếp nhận',
-        statusColor: '#FFA500',
-        date: new Date().toLocaleDateString('vi-VN'),
-        thumb: images.length > 0 ? images[0] : undefined,
-        category,
-        desc
-      };
-      
-      addFeedback(newFeedback);
-      
-      snackbar.openSnackbar({ type: 'success', text: 'Phản ánh đã được gửi thành công!' });
-      navigate('/feedback', { replace: true });
-    }, 1500);
-  };
+    try {
+      const imageUrls = isServiceAttitude ? [] : await uploadFeedbackImages(images);
+      await apiCall('/api/feedbacks', {
+        method: 'POST',
+        body: JSON.stringify(isServiceAttitude ? {
+          type: 'SERVICE_ATTITUDE',
+          serviceUnit: serviceUnit.trim(),
+          satisfactionScore,
+          contactPhone: contactPhone.trim(),
+          description: description.trim()
+        } : {
+          type: 'FIELD',
+          title: title.trim(),
+          category,
+          contactPhone: contactPhone.trim(),
+          description: description.trim(),
+          imageUrls,
+          latitude: locationObj?.latitude,
+          longitude: locationObj?.longitude
+        })
+      });
 
-  // Step progress
-  const step1Done = title.length >= 10 && category !== '';
-  const step2Done = desc.length >= 20;
+      snackbar.openSnackbar({ type: 'success', text: 'Đã gửi phản ánh thành công!' });
+      navigate('/feedback', { replace: true });
+    } catch (err) {
+      snackbar.openSnackbar({ type: 'error', text: err instanceof Error ? err.message : 'Không thể gửi phản ánh' });
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <Page className="page" style={{ backgroundColor: 'var(--surface)', height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <PageHeader title="Tạo phản ánh" />
+      <PageHeader title={isServiceAttitude ? 'Phản ánh thái độ phục vụ' : 'Phản ánh hiện trường'} />
 
-      {/* Progress Steps */}
-      <div className="animate-fade-in-up" style={{
-        padding: '16px 20px', background: 'var(--surface-raised)',
-        borderBottom: '1px solid var(--border-light)'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <div style={{
-            width: '28px', height: '28px', borderRadius: '50%',
-            background: step1Done ? 'var(--success)' : 'var(--gradient-hero)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: '#fff', fontSize: '12px', fontWeight: 700
-          }}>
-            {step1Done ? '✓' : '1'}
-          </div>
-          <div style={{
-            flex: 1, height: '3px', borderRadius: '2px',
-            background: step1Done ? 'var(--success)' : 'var(--border)'
-          }} />
-          <div style={{
-            width: '28px', height: '28px', borderRadius: '50%',
-            background: step2Done ? 'var(--success)' : step1Done ? 'var(--gradient-hero)' : 'var(--border)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: step1Done ? '#fff' : 'var(--text-muted)', fontSize: '12px', fontWeight: 700
-          }}>
-            {step2Done ? '✓' : '2'}
-          </div>
-          <div style={{
-            flex: 1, height: '3px', borderRadius: '2px',
-            background: step2Done ? 'var(--success)' : 'var(--border)'
-          }} />
-          <div style={{
-            width: '28px', height: '28px', borderRadius: '50%',
-            background: 'var(--border)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: 'var(--text-muted)', fontSize: '12px', fontWeight: 700
-          }}>
-            3
-          </div>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '6px' }}>
-          <Text style={{ fontSize: '10px', color: step1Done ? 'var(--success)' : 'var(--text-muted)', fontWeight: 600 }}>Thông tin</Text>
-          <Text style={{ fontSize: '10px', color: step2Done ? 'var(--success)' : 'var(--text-muted)', fontWeight: 600 }}>Mô tả</Text>
-          <Text style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 600 }}>Gửi</Text>
-        </div>
-      </div>
+      <Box style={{ flex: 1, overflow: 'auto', padding: '16px', paddingBottom: '160px', backgroundColor: 'var(--surface-raised)' }}>
+        <div style={{ display: 'grid', gap: '16px' }}>
+          {isServiceAttitude ? (
+            <>
+              <Box>
+                <Text style={{ fontWeight: 700, marginBottom: '8px', color: 'var(--text-primary)', fontSize: '15px' }}>
+                  Đơn vị <span style={{ color: 'var(--danger)' }}>*</span>
+                </Text>
+                <Select placeholder="Chọn đơn vị" value={serviceUnit} onChange={(value) => setServiceUnit(String(value))} closeOnSelect>
+                  {serviceUnits.map(unit => <Select.Option key={unit} value={unit} title={unit} />)}
+                </Select>
+              </Box>
 
-      <Box style={{ flex: 1, overflow: 'auto', padding: '16px', backgroundColor: 'var(--surface-raised)' }}>
-        {/* Title */}
-        <Box className="animate-fade-in-up" style={{ marginBottom: '20px' }}>
-          <Text style={{ fontWeight: 600, marginBottom: '8px', color: 'var(--text-primary)', fontSize: '14px' }}>
-            📝 Tiêu đề <span style={{ color: 'var(--danger)' }}>*</span>
-          </Text>
-          <Input 
-            placeholder="Mô tả ngắn gọn vấn đề cần phản ánh" 
-            maxLength={100}
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-          />
-        </Box>
-
-        {/* Category */}
-        <Box className="animate-fade-in-up delay-50" style={{ marginBottom: '20px' }}>
-          <Text style={{ fontWeight: 600, marginBottom: '8px', color: 'var(--text-primary)', fontSize: '14px' }}>
-            📋 Danh mục <span style={{ color: 'var(--danger)' }}>*</span>
-          </Text>
-          <Select 
-            placeholder="Chọn danh mục" 
-            value={category}
-            onChange={(val) => setCategory(String(val))}
-            closeOnSelect={true}
-          >
-            <Select.Option value="ha-tang" title="Hạ tầng – Đường sá" />
-            <Select.Option value="ve-sinh" title="Vệ sinh môi trường" />
-            <Select.Option value="trat-tu" title="Trật tự đô thị" />
-            <Select.Option value="an-ninh" title="An ninh – Trật tự" />
-            <Select.Option value="khac" title="Vấn đề khác" />
-          </Select>
-        </Box>
-
-        {/* Desc */}
-        <Box className="animate-fade-in-up delay-100" style={{ marginBottom: '20px' }}>
-          <Text style={{ fontWeight: 600, marginBottom: '8px', color: 'var(--text-primary)', fontSize: '14px' }}>
-            💬 Mô tả chi tiết <span style={{ color: 'var(--danger)' }}>*</span>
-          </Text>
-          <Input.TextArea 
-            placeholder="Mô tả đầy đủ vấn đề bạn muốn phản ánh..." 
-            maxLength={1000}
-            value={desc}
-            onChange={(e) => setDesc(e.target.value)}
-            rows={4}
-            showCount
-          />
-        </Box>
-
-        {/* Images */}
-        <Box className="animate-fade-in-up delay-150" style={{ marginBottom: '20px' }}>
-          <Text style={{ fontWeight: 600, marginBottom: '8px', color: 'var(--text-primary)', fontSize: '14px' }}>
-            📸 Ảnh đính kèm <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(tối đa 3)</span>
-          </Text>
-          <div style={{ display: 'flex', gap: '10px' }}>
-            {images.map((img, idx) => (
-              <div key={idx} style={{ position: 'relative' }}>
-                <img src={img} alt="attachment" style={{
-                  width: '80px', height: '80px', objectFit: 'cover',
-                  borderRadius: 'var(--radius-md)', border: '2px solid var(--border-light)'
-                }} />
-                <div 
-                  onClick={() => setImages(images.filter((_, i) => i !== idx))}
-                  style={{
-                    position: 'absolute', top: -6, right: -6,
-                    background: 'var(--danger)', color: 'white',
-                    borderRadius: '50%', width: 22, height: 22,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    boxShadow: 'var(--shadow-sm)', cursor: 'pointer'
-                  }}
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round">
-                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                  </svg>
+              <Box>
+                <Text style={{ fontWeight: 700, marginBottom: '8px', color: 'var(--text-primary)', fontSize: '15px' }}>
+                  Mức độ hài lòng <span style={{ color: 'var(--danger)' }}>*</span>
+                </Text>
+                <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', padding: '10px 0' }}>
+                  {[1, 2, 3, 4, 5].map(star => (
+                    <button key={star} type="button" onClick={() => setSatisfactionScore(star)} style={{ background: 'transparent', border: 0, padding: 4 }}>
+                      <svg width="42" height="42" viewBox="0 0 24 24" fill={star <= satisfactionScore ? '#FFC107' : '#D8DEE9'}>
+                        <path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
+                      </svg>
+                    </button>
+                  ))}
                 </div>
-              </div>
-            ))}
-            {images.length < 3 && (
-              <div 
-                onClick={handlePickImages}
-                className="active-scale"
-                style={{
-                  width: '80px', height: '80px',
-                  border: '2px dashed var(--primary)',
-                  borderRadius: 'var(--radius-md)',
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                  color: 'var(--primary)', cursor: 'pointer',
-                  background: 'var(--primary-light)'
-                }}
-              >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-                  <circle cx="12" cy="13" r="4"/>
-                </svg>
-                <Text style={{ fontSize: '10px', fontWeight: 600, marginTop: '4px', color: 'var(--primary)' }}>Thêm ảnh</Text>
-              </div>
-            )}
-          </div>
-        </Box>
-
-        {/* Location */}
-        <Box className="animate-fade-in-up delay-200" style={{ marginBottom: '24px' }}>
-          <Text style={{ fontWeight: 600, marginBottom: '8px', color: 'var(--text-primary)', fontSize: '14px' }}>📍 Vị trí</Text>
-          {locationObj ? (
-            <div style={{
-              padding: '12px', borderRadius: 'var(--radius-md)',
-              background: 'var(--success-light)',
-              display: 'flex', alignItems: 'center', gap: '8px'
-            }}>
-              <Text style={{ fontSize: '16px' }}>✅</Text>
-              <Text style={{ color: 'var(--success)', fontWeight: 500, fontSize: '13px' }}>
-                Đã lấy vị trí (lat: {locationObj.latitude.toFixed(4)}, lng: {locationObj.longitude.toFixed(4)})
-              </Text>
-            </div>
+              </Box>
+            </>
           ) : (
-            <button
-              onClick={fetchLocation}
-              disabled={loadingLocation}
-              style={{
-                width: '100%', padding: '12px',
-                border: '1.5px solid var(--primary)',
-                borderRadius: 'var(--radius-md)',
-                background: 'transparent', color: 'var(--primary)',
-                fontWeight: 600, fontSize: '14px', cursor: 'pointer'
-              }}
-            >
-              {loadingLocation ? '⏳ Đang lấy vị trí...' : '📍 Lấy vị trí hiện tại'}
-            </button>
+            <>
+              <Box>
+                <Text style={{ fontWeight: 700, marginBottom: '8px', color: 'var(--text-primary)', fontSize: '15px' }}>
+                  Tiêu đề <span style={{ color: 'var(--danger)' }}>*</span>
+                </Text>
+                <Input placeholder="Mô tả ngắn gọn vấn đề cần phản ánh" maxLength={100} value={title} onChange={(e) => setTitle(e.target.value)} />
+              </Box>
+
+              <Box>
+                <Text style={{ fontWeight: 700, marginBottom: '8px', color: 'var(--text-primary)', fontSize: '15px' }}>
+                  Danh mục <span style={{ color: 'var(--danger)' }}>*</span>
+                </Text>
+                <Select placeholder="Chọn danh mục" value={category} onChange={(value) => setCategory(String(value) as FeedbackCategory)} closeOnSelect>
+                  {categoryOptions.map(option => <Select.Option key={option.value} value={option.value} title={option.label} />)}
+                </Select>
+              </Box>
+            </>
           )}
-        </Box>
+
+          <Box>
+            <Text style={{ fontWeight: 700, marginBottom: '8px', color: 'var(--text-primary)', fontSize: '15px' }}>
+              Số điện thoại liên hệ <span style={{ color: 'var(--danger)' }}>*</span>
+            </Text>
+            <Input
+              placeholder="Nhập số điện thoại để cán bộ liên hệ lại"
+              type="text"
+              value={contactPhone}
+              onChange={(e) => setContactPhone(e.target.value.replace(/[^\d]/g, '').slice(0, 11))}
+            />
+          </Box>
+
+          <Box>
+            <Text style={{ fontWeight: 700, marginBottom: '8px', color: 'var(--text-primary)', fontSize: '15px' }}>
+              Nội dung <span style={{ color: 'var(--danger)' }}>*</span>
+            </Text>
+            <Input.TextArea
+              placeholder={isServiceAttitude ? 'Nhập nội dung phản ánh thái độ phục vụ...' : 'Mô tả đầy đủ vấn đề bạn muốn phản ánh...'}
+              maxLength={1000}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={5}
+              showCount
+            />
+          </Box>
+
+          {!isServiceAttitude && (
+            <>
+              <Box>
+                <Text style={{ fontWeight: 700, marginBottom: '8px', color: 'var(--text-primary)', fontSize: '15px' }}>
+                  Ảnh đính kèm <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(tối đa 3)</span>
+                </Text>
+                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                  {images.map((img, idx) => (
+                    <div key={img} style={{ position: 'relative' }}>
+                      <img src={img} alt="attachment" style={{ width: 80, height: 80, objectFit: 'cover', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)' }} />
+                      <button
+                        type="button"
+                        onClick={() => setImages(images.filter((_, i) => i !== idx))}
+                        style={{ position: 'absolute', top: -6, right: -6, width: 22, height: 22, borderRadius: '50%', background: 'var(--danger)', color: '#fff' }}
+                      >
+                        x
+                      </button>
+                    </div>
+                  ))}
+                  {images.length < 3 && (
+                    <button
+                      type="button"
+                      onClick={handlePickImages}
+                      style={{ width: 80, height: 80, border: '2px dashed var(--primary)', borderRadius: 'var(--radius-md)', background: 'var(--primary-light)', color: 'var(--primary)', fontWeight: 700 }}
+                    >
+                      Thêm ảnh
+                    </button>
+                  )}
+                </div>
+              </Box>
+
+              <Box>
+                <Text style={{ fontWeight: 700, marginBottom: '8px', color: 'var(--text-primary)', fontSize: '15px' }}>Vị trí</Text>
+                {locationObj ? (
+                  <div style={{ padding: '12px', borderRadius: 'var(--radius-md)', background: 'var(--success-light)' }}>
+                    <Text style={{ color: 'var(--success)', fontWeight: 600, fontSize: '13px' }}>
+                      Đã lấy vị trí ({locationObj.latitude.toFixed(4)}, {locationObj.longitude.toFixed(4)})
+                    </Text>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={fetchLocation}
+                    disabled={loadingLocation}
+                    style={{ width: '100%', padding: '12px', border: '1.5px solid var(--primary)', borderRadius: 'var(--radius-md)', background: 'transparent', color: 'var(--primary)', fontWeight: 700 }}
+                  >
+                    {loadingLocation ? 'Đang lấy vị trí...' : 'Lấy vị trí hiện tại'}
+                  </button>
+                )}
+              </Box>
+            </>
+          )}
+        </div>
       </Box>
 
-      {/* Submit */}
       <Box style={{ padding: '16px', paddingBottom: '80px', backgroundColor: 'var(--surface-raised)', borderTop: '1px solid var(--border-light)' }}>
         <button
           onClick={handleSubmit}
           disabled={submitting}
           className="btn-gradient ripple-container"
-          style={{
-            width: '100%', padding: '14px',
-            border: 'none', borderRadius: 'var(--radius-md)',
-            fontWeight: 700, fontSize: '15px', cursor: 'pointer',
-            opacity: submitting ? 0.7 : 1
-          }}
+          style={{ width: '100%', padding: '14px', border: 'none', borderRadius: 'var(--radius-md)', fontWeight: 700, fontSize: '15px', opacity: submitting ? 0.7 : 1 }}
         >
-          {submitting ? '⏳ Đang gửi...' : '🚀 Gửi phản ánh'}
+          {submitting ? 'Đang gửi...' : 'Gửi phản ánh'}
         </button>
       </Box>
     </Page>

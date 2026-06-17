@@ -8,7 +8,10 @@ export const createFeedback = async (req: Request, res: Response, next: NextFunc
     const userId = req.user!.userId;
     const feedback = await feedbackService.createFeedback(userId, req.body);
     res.status(201).json({ success: true, data: feedback });
-  } catch (error) {
+  } catch (error: any) {
+    if (['MISSING_TITLE', 'MISSING_CATEGORY', 'MISSING_DESCRIPTION', 'MISSING_SERVICE_UNIT', 'INVALID_SATISFACTION_SCORE', 'INVALID_CONTACT_PHONE', 'TOO_MANY_IMAGES'].includes(error.message)) {
+      return res.status(400).json({ success: false, error: { code: error.message, message: 'Dữ liệu phản ánh không hợp lệ' } });
+    }
     next(error);
   }
 };
@@ -39,6 +42,39 @@ export const getFeedbackDetails = async (req: Request, res: Response, next: Next
 
     res.status(200).json({ success: true, data: feedback });
   } catch (error) {
+    next(error);
+  }
+};
+
+export const getAdminFeedbacks = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const data = await feedbackService.getAdminFeedbacks(req.query);
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getAdminFeedbackSummary = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const data = await feedbackService.getAdminFeedbackSummary();
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateFeedbackStatusByAdmin = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const data = await feedbackService.updateFeedbackStatusByAdmin(req.params.id, req.body);
+    res.status(200).json({ success: true, data });
+  } catch (error: any) {
+    if (error.message === 'NOT_FOUND') {
+      return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Không tìm thấy phản ánh' } });
+    }
+    if (error.message === 'MISSING_RESPONSE') {
+      return res.status(400).json({ success: false, error: { code: 'MISSING_RESPONSE', message: 'Vui lòng nhập phản hồi khi hoàn tất phản ánh' } });
+    }
     next(error);
   }
 };

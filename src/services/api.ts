@@ -78,3 +78,32 @@ export async function apiCall<T>(
 
   return readApiResponse<T>(res);
 }
+
+export async function uploadFeedbackImages(filePaths: string[]): Promise<string[]> {
+  if (filePaths.length === 0) return [];
+
+  let token = await loginWithZalo();
+  const formData = new FormData();
+
+  for (const [index, filePath] of filePaths.entries()) {
+    const response = await fetch(filePath);
+    const blob = await response.blob();
+    formData.append('files', blob, `feedback-${index + 1}.jpg`);
+  }
+
+  const doRequest = () => fetch(`${BASE_URL}/api/upload`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData
+  });
+
+  let res = await doRequest();
+  if (res.status === 401) {
+    clearApiToken();
+    token = await loginWithZalo();
+    res = await doRequest();
+  }
+
+  const data = await readApiResponse<{ urls: string[] }>(res);
+  return data.urls;
+}
