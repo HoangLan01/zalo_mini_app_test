@@ -26,7 +26,19 @@ interface AdminFeedbackQuery {
   limit?: number;
 }
 
-type FeedbackCreateData = Omit<Prisma.FeedbackUncheckedCreateInput, 'id' | 'code' | 'userId' | 'createdAt' | 'updatedAt'>;
+type FeedbackCreateData = {
+  type: FeedbackType;
+  title: string;
+  category: FeedbackCategory;
+  serviceUnit?: string;
+  satisfactionScore?: number;
+  contactPhone: string;
+  description: string;
+  imageUrls: string[];
+  latitude?: number;
+  longitude?: number;
+  address?: string;
+};
 
 const getPagination = (query: AdminFeedbackQuery) => {
   const page = Math.max(1, Number(query.page) || 1);
@@ -138,19 +150,24 @@ export const getFeedbackById = async (id: string, userId: string) => {
 
 export const getAdminFeedbacks = async (query: AdminFeedbackQuery) => {
   const { page, limit, skip } = getPagination(query);
+  const search = query.search?.trim();
+  const containsSearch = search
+    ? { contains: search, mode: Prisma.QueryMode.insensitive }
+    : undefined;
+
+  const searchFilters: Prisma.FeedbackWhereInput[] = containsSearch ? [
+    { code: containsSearch },
+    { title: containsSearch },
+    { description: containsSearch },
+    { contactPhone: containsSearch } as unknown as Prisma.FeedbackWhereInput,
+    { serviceUnit: containsSearch },
+    { user: { displayName: containsSearch } }
+  ] : [];
+
   const where: Prisma.FeedbackWhereInput = {
     ...(query.type && query.type !== 'ALL' ? { type: query.type as FeedbackType } : {}),
     ...(query.status && query.status !== 'ALL' ? { status: query.status as FeedbackStatus } : {}),
-    ...(query.search ? {
-      OR: [
-        { code: { contains: query.search, mode: 'insensitive' } },
-        { title: { contains: query.search, mode: 'insensitive' } },
-        { description: { contains: query.search, mode: 'insensitive' } },
-        { contactPhone: { contains: query.search, mode: 'insensitive' } },
-        { serviceUnit: { contains: query.search, mode: 'insensitive' } },
-        { user: { displayName: { contains: query.search, mode: 'insensitive' } } }
-      ]
-    } : {})
+    ...(searchFilters.length > 0 ? { OR: searchFilters } : {})
   };
 
   const [items, total] = await Promise.all([
