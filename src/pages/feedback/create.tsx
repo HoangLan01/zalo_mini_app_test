@@ -12,7 +12,7 @@ const categoryOptions: Array<{ value: FeedbackCategory; label: string }> = [
   { value: 'VE_SINH', label: 'Vệ sinh môi trường' },
   { value: 'TRAT_TU', label: 'Trật tự đô thị' },
   { value: 'AN_NINH', label: 'An ninh - Trật tự' },
-  { value: 'KHAC', label: 'Vấn đề khác' },
+  { value: 'KHAC', label: 'Vấn đề khác' }
 ];
 
 const serviceUnits = [
@@ -24,7 +24,7 @@ const serviceUnits = [
   'Đô thị xây dựng',
   'Văn phòng',
   'Công an phường',
-  'Quân sự phường',
+  'Quân sự phường'
 ];
 
 const FeedbackCreatePage: React.FC = () => {
@@ -53,7 +53,7 @@ const FeedbackCreatePage: React.FC = () => {
       const { latitude, longitude } = await getLocation({});
       setLocationObj({ latitude, longitude });
     } catch {
-      snackbar.openSnackbar({ type: 'error', text: 'Không thể lấy vị trí. Vui lòng cho phép quyền truy cập vị trí.' });
+      snackbar.openSnackbar({ type: 'error', text: 'Không thể lấy vị trí. Vui lòng cấp quyền truy cập vị trí.' });
     } finally {
       setLoadingLocation(false);
     }
@@ -115,7 +115,7 @@ const FeedbackCreatePage: React.FC = () => {
       });
 
       snackbar.openSnackbar({ type: 'success', text: 'Đã gửi phản ánh thành công!' });
-      navigate('/feedback', { replace: true });
+      navigate('/feedback', { replace: true, state: { type } });
     } catch (err) {
       snackbar.openSnackbar({ type: 'error', text: err instanceof Error ? err.message : 'Không thể gửi phản ánh' });
     } finally {

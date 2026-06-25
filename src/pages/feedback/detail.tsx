@@ -51,13 +51,16 @@ const statusBadge = (status: FeedbackStatus) => {
   return 'badge-warning';
 };
 
-const formatDateTime = (value?: string | null) => value ? new Intl.DateTimeFormat('vi-VN', {
-  day: '2-digit',
-  month: '2-digit',
-  year: 'numeric',
-  hour: '2-digit',
-  minute: '2-digit',
-}).format(new Date(value)) : '';
+const formatDateTime = (value?: string | null) =>
+  value
+    ? new Intl.DateTimeFormat('vi-VN', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      }).format(new Date(value))
+    : '';
 
 const FeedbackDetailPage: React.FC = () => {
   const { state } = useLocation();
@@ -71,13 +74,14 @@ const FeedbackDetailPage: React.FC = () => {
     setLoading(true);
     apiCall<FeedbackDetail>(`/api/feedbacks/${feedbackId}`)
       .then(setFeedback)
-      .catch(err => snackbar.openSnackbar({ type: 'error', text: err instanceof Error ? err.message : 'Không thể tải phản ánh' }))
+      .catch((err) =>
+        snackbar.openSnackbar({ type: 'error', text: err instanceof Error ? err.message : 'Không thể tải phản ánh' })
+      )
       .finally(() => setLoading(false));
-  }, [feedbackId]);
+  }, [feedbackId, snackbar]);
 
-  const locationText = feedback?.address || (
-    feedback?.latitude && feedback?.longitude ? `${feedback.latitude.toFixed(5)}, ${feedback.longitude.toFixed(5)}` : ''
-  );
+  const locationText =
+    feedback?.address || (feedback?.latitude && feedback?.longitude ? `${feedback.latitude.toFixed(5)}, ${feedback.longitude.toFixed(5)}` : '');
 
   return (
     <Page className="page" style={{ backgroundColor: 'var(--surface)', height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -112,9 +116,7 @@ const FeedbackDetailPage: React.FC = () => {
 
               <div className="divider-gradient" style={{ marginBottom: '16px' }} />
 
-              <Text style={{ fontSize: '15px', color: 'var(--text-secondary)', lineHeight: '1.7', marginBottom: '16px' }}>
-                {feedback.description}
-              </Text>
+              <Text style={{ fontSize: '15px', color: 'var(--text-secondary)', lineHeight: '1.7', marginBottom: '16px' }}>{feedback.description}</Text>
 
               {feedback.imageUrls?.length > 0 && (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', marginBottom: '16px' }}>
@@ -134,12 +136,15 @@ const FeedbackDetailPage: React.FC = () => {
             <Text className="section-title animate-fade-in-up delay-100" style={{ marginBottom: '12px', marginLeft: '4px' }}>
               Phản hồi từ phường
             </Text>
-            <div style={{
-              background: 'linear-gradient(135deg, #EEF4FF 0%, #F0F4FF 100%)',
-              borderLeft: '4px solid var(--primary)',
-              padding: '16px', borderRadius: 'var(--radius-md)',
-              boxShadow: 'var(--shadow-sm)'
-            }}>
+            <div
+              style={{
+                background: 'linear-gradient(135deg, #EEF4FF 0%, #F0F4FF 100%)',
+                borderLeft: '4px solid var(--primary)',
+                padding: '16px',
+                borderRadius: 'var(--radius-md)',
+                boxShadow: 'var(--shadow-sm)',
+              }}
+            >
               <Text style={{ fontSize: '14px', color: 'var(--text-primary)', lineHeight: '1.7', marginBottom: feedback.respondedAt ? '10px' : 0 }}>
                 {feedback.response || 'Phản ánh đang được tiếp nhận và xử lý.'}
               </Text>

@@ -3,6 +3,7 @@ import { prisma } from '../server';
 import { generateFeedbackCode, getNextSequence } from '../utils/generateCode';
 import { sendFeedbackReceived, sendFeedbackUpdated } from './zns.service';
 import { sendFeedbackAdminAlert } from './zaloOA.service';
+import { AppError } from '../utils/appError';
 
 interface CreateFeedbackInput {
   type?: FeedbackType;
@@ -52,16 +53,20 @@ const normalizeCreateData = (data: CreateFeedbackInput): FeedbackCreateData => {
   const contactPhone = data.contactPhone?.trim();
 
   if (!contactPhone || !/^\d{10,11}$/.test(contactPhone)) {
-    throw new Error('INVALID_CONTACT_PHONE');
+    throw new AppError('INVALID_CONTACT_PHONE', 'Số điện thoại liên hệ không hợp lệ', 400);
   }
 
   if (type === 'SERVICE_ATTITUDE') {
     const serviceUnit = data.serviceUnit?.trim();
-    if (!serviceUnit) throw new Error('MISSING_SERVICE_UNIT');
-    if (!data.satisfactionScore || data.satisfactionScore < 1 || data.satisfactionScore > 5) {
-      throw new Error('INVALID_SATISFACTION_SCORE');
+    if (!serviceUnit) {
+      throw new AppError('MISSING_SERVICE_UNIT', 'Vui lòng chọn đơn vị cần phản ánh', 400);
     }
-    if (!description) throw new Error('MISSING_DESCRIPTION');
+    if (!data.satisfactionScore || data.satisfactionScore < 1 || data.satisfactionScore > 5) {
+      throw new AppError('INVALID_SATISFACTION_SCORE', 'Mức độ hài lòng không hợp lệ', 400);
+    }
+    if (!description) {
+      throw new AppError('MISSING_DESCRIPTION', 'Vui lòng nhập nội dung phản ánh', 400);
+    }
 
     return {
       type,
@@ -71,14 +76,22 @@ const normalizeCreateData = (data: CreateFeedbackInput): FeedbackCreateData => {
       satisfactionScore: data.satisfactionScore,
       contactPhone,
       description,
-      imageUrls: []
+      imageUrls: [],
     };
   }
 
-  if (!data.title?.trim()) throw new Error('MISSING_TITLE');
-  if (!data.category) throw new Error('MISSING_CATEGORY');
-  if (!description) throw new Error('MISSING_DESCRIPTION');
-  if ((data.imageUrls || []).length > 3) throw new Error('TOO_MANY_IMAGES');
+  if (!data.title?.trim()) {
+    throw new AppError('MISSING_TITLE', 'Vui lòng nhập tiêu đề phản ánh', 400);
+  }
+  if (!data.category) {
+    throw new AppError('MISSING_CATEGORY', 'Vui lòng chọn danh mục phản ánh', 400);
+  }
+  if (!description) {
+    throw new AppError('MISSING_DESCRIPTION', 'Vui lòng nhập nội dung phản ánh', 400);
+  }
+  if ((data.imageUrls || []).length > 3) {
+    throw new AppError('TOO_MANY_IMAGES', 'Chỉ được đính kèm tối đa 3 ảnh', 400);
+  }
 
   return {
     type: 'FIELD',
@@ -89,7 +102,7 @@ const normalizeCreateData = (data: CreateFeedbackInput): FeedbackCreateData => {
     imageUrls: data.imageUrls || [],
     latitude: data.latitude,
     longitude: data.longitude,
-    address: data.address?.trim() || undefined
+    address: data.address?.trim() || undefined,
   };
 };
 
@@ -102,17 +115,19 @@ export const createFeedback = async (userId: string, data: CreateFeedbackInput) 
     data: {
       userId,
       code,
-      ...feedbackData
+      ...feedbackData,
     },
-    include: { user: true }
+    include: { user: true },
   });
 
   sendFeedbackReceived(feedback.user.phoneToken || null, feedback).catch();
-  sendFeedbackAdminAlert(feedback, feedback.user).then(oaMessageId => {
-    if (oaMessageId) {
-      prisma.feedback.update({ where: { id: feedback.id }, data: { oaMessageId } }).catch();
-    }
-  }).catch();
+  sendFeedbackAdminAlert(feedback, feedback.user)
+    .then((oaMessageId) => {
+      if (oaMessageId) {
+        prisma.feedback.update({ where: { id: feedback.id }, data: { oaMessageId } }).catch();
+      }
+    })
+    .catch();
 
   return feedback;
 };
@@ -128,9 +143,9 @@ export const getFeedbacksByUser = async (
       where,
       orderBy: { createdAt: 'desc' },
       skip,
-      take: filters.limit
+      take: filters.limit,
     }),
-    prisma.feedback.count({ where })
+    prisma.feedback.count({ where }),
   ]);
 
   return {
@@ -139,8 +154,8 @@ export const getFeedbacksByUser = async (
       page: filters.page,
       limit: filters.limit,
       total,
-      totalPages: Math.ceil(total / filters.limit)
-    }
+      totalPages: Math.ceil(total / filters.limit),
+    },
   };
 };
 
@@ -151,23 +166,23 @@ export const getFeedbackById = async (id: string, userId: string) => {
 export const getAdminFeedbacks = async (query: AdminFeedbackQuery) => {
   const { page, limit, skip } = getPagination(query);
   const search = query.search?.trim();
-  const containsSearch = search
-    ? { contains: search, mode: Prisma.QueryMode.insensitive }
-    : undefined;
+  const containsSearch = search ? { contains: search, mode: Prisma.QueryMode.insensitive } : undefined;
 
-  const searchFilters: Prisma.FeedbackWhereInput[] = containsSearch ? [
-    { code: containsSearch },
-    { title: containsSearch },
-    { description: containsSearch },
-    { contactPhone: containsSearch } as unknown as Prisma.FeedbackWhereInput,
-    { serviceUnit: containsSearch },
-    { user: { displayName: containsSearch } }
-  ] : [];
+  const searchFilters: Prisma.FeedbackWhereInput[] = containsSearch
+    ? [
+        { code: containsSearch },
+        { title: containsSearch },
+        { description: containsSearch },
+        { contactPhone: containsSearch } as unknown as Prisma.FeedbackWhereInput,
+        { serviceUnit: containsSearch },
+        { user: { displayName: containsSearch } },
+      ]
+    : [];
 
   const where: Prisma.FeedbackWhereInput = {
     ...(query.type && query.type !== 'ALL' ? { type: query.type as FeedbackType } : {}),
     ...(query.status && query.status !== 'ALL' ? { status: query.status as FeedbackStatus } : {}),
-    ...(searchFilters.length > 0 ? { OR: searchFilters } : {})
+    ...(searchFilters.length > 0 ? { OR: searchFilters } : {}),
   };
 
   const [items, total] = await Promise.all([
@@ -176,9 +191,9 @@ export const getAdminFeedbacks = async (query: AdminFeedbackQuery) => {
       include: { user: { select: { id: true, displayName: true, avatarUrl: true, zaloId: true } } },
       orderBy: { createdAt: 'desc' },
       skip,
-      take: limit
+      take: limit,
     }),
-    prisma.feedback.count({ where })
+    prisma.feedback.count({ where }),
   ]);
 
   return { items, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } };
@@ -187,7 +202,7 @@ export const getAdminFeedbacks = async (query: AdminFeedbackQuery) => {
 export const getAdminFeedbackSummary = async () => {
   const [byStatusGrouped, byTypeGrouped] = await Promise.all([
     prisma.feedback.groupBy({ by: ['status'], _count: { status: true } }),
-    prisma.feedback.groupBy({ by: ['type'], _count: { type: true } })
+    prisma.feedback.groupBy({ by: ['type'], _count: { type: true } }),
   ]);
 
   const byStatus = byStatusGrouped.reduce<Record<string, number>>((acc, item) => {
@@ -208,17 +223,21 @@ export const updateFeedbackStatusByAdmin = async (
   data: { status: FeedbackStatus; response?: string }
 ) => {
   const existing = await prisma.feedback.findUnique({ where: { id } });
-  if (!existing) throw new Error('NOT_FOUND');
-  if (data.status === 'RESOLVED' && !data.response?.trim()) throw new Error('MISSING_RESPONSE');
+  if (!existing) {
+    throw new AppError('NOT_FOUND', 'Không tìm thấy phản ánh', 404);
+  }
+  if (data.status === 'RESOLVED' && !data.response?.trim()) {
+    throw new AppError('MISSING_RESPONSE', 'Vui lòng nhập phản hồi khi hoàn tất phản ánh', 400);
+  }
 
   const feedback = await prisma.feedback.update({
     where: { id },
     data: {
       status: data.status,
       response: data.response?.trim() || (data.status === 'RESOLVED' ? existing.response : undefined),
-      respondedAt: data.status === 'RESOLVED' ? new Date() : undefined
+      respondedAt: data.status === 'RESOLVED' ? new Date() : undefined,
     },
-    include: { user: true }
+    include: { user: true },
   });
 
   sendFeedbackUpdated(feedback.user.phoneToken || null, feedback).catch();
@@ -227,16 +246,18 @@ export const updateFeedbackStatusByAdmin = async (
 
 export const updateFeedbackFromWebhook = async (oaMessageId: string, status: FeedbackStatus, response?: string) => {
   const existing = await prisma.feedback.findFirst({ where: { oaMessageId } });
-  if (!existing) throw new Error('NOT_FOUND');
+  if (!existing) {
+    throw new AppError('NOT_FOUND', 'Không tìm thấy phản ánh', 404);
+  }
 
   const feedback = await prisma.feedback.update({
     where: { id: existing.id },
     data: {
       status,
       response,
-      respondedAt: status === 'RESOLVED' ? new Date() : undefined
+      respondedAt: status === 'RESOLVED' ? new Date() : undefined,
     },
-    include: { user: true }
+    include: { user: true },
   });
 
   sendFeedbackUpdated(feedback.user.phoneToken || null, feedback).catch();

@@ -7,7 +7,7 @@ const IhanoiPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    openExternalUrl('https://ihanoi.gov.vn', 'iHanoi');
+    openExternalUrl('https://ihanoi.gov.vn');
     const timer = setTimeout(() => setLoading(false), 2000);
     return () => clearTimeout(timer);
   }, []);
@@ -26,7 +26,7 @@ const IhanoiPage: React.FC = () => {
             <Text style={{ marginBottom: '16px', color: '#1A1A1A', lineHeight: '1.5' }}>
               iHanoi là nền tảng số của Thành phố Hà Nội, cung cấp dịch vụ hành chính và tiện ích cho người dân và doanh nghiệp.
             </Text>
-            <Button onClick={() => openExternalUrl('https://ihanoi.gov.vn', 'iHanoi')} fullWidth>
+            <Button onClick={() => openExternalUrl('https://ihanoi.gov.vn')} fullWidth>
               Mở iHanoi
             </Button>
           </Box>

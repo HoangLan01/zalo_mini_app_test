@@ -7,14 +7,14 @@ const VneidPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    openExternalUrl('https://vneid.gov.vn', 'VNeID');
+    openExternalUrl('https://vneid.gov.vn');
     const timer = setTimeout(() => setLoading(false), 2000);
     return () => clearTimeout(timer);
   }, []);
 
   return (
     <Page className="page" style={{ backgroundColor: '#F5F5F5', height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <PageHeader title="VNeID – Định danh điện tử" />
+      <PageHeader title="VNeID - Định danh điện tử" />
       <Box style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
         {loading ? (
           <>
@@ -26,7 +26,7 @@ const VneidPage: React.FC = () => {
             <Text style={{ marginBottom: '16px', color: '#1A1A1A', lineHeight: '1.5' }}>
               VNeID là ứng dụng định danh điện tử quốc gia do Bộ Công an phát hành. Bạn cần cài đặt ứng dụng VNeID trên thiết bị để sử dụng đầy đủ tính năng.
             </Text>
-            <Button onClick={() => openExternalUrl('https://vneid.gov.vn', 'VNeID')} fullWidth>
+            <Button onClick={() => openExternalUrl('https://vneid.gov.vn')} fullWidth>
               Tìm hiểu VNeID
             </Button>
           </Box>

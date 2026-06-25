@@ -1,26 +1,33 @@
-// src/routes/booking.routes.ts
 import { Router } from 'express';
 import { z } from 'zod';
-import { validate } from '../middleware/validate.middleware';
+import { BookingField } from '@prisma/client';
+import { bookingCreateIpRateLimiter, bookingCreateRateLimiter } from '../middleware/rateLimit.middleware';
+import { validate, validateParams, validateQuery } from '../middleware/validate.middleware';
 import { authenticateToken } from '../middleware/auth.middleware';
 import * as bookingController from '../controllers/booking.controller';
-import { BookingField } from '@prisma/client';
 
 const router = Router();
 
 const createBookingSchema = z.object({
   field: z.nativeEnum(BookingField),
-  preferredDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Sai dinh dang YYYY-MM-DD'),
-  preferredTime: z.string().regex(/^\d{2}:\d{2}$/, 'Sai dinh dang HH:mm'),
-  description: z.string().min(10, 'Noi dung toi thieu 10 ky tu').max(500, 'Noi dung toi da 500 ky tu'),
-  contactName: z.string().min(2, 'Ten nguoi lien he toi thieu 2 ky tu').max(100, 'Ten nguoi lien he toi da 100 ky tu'),
-  contactPhone: z.string().regex(/^\d{10,11}$/, 'So dien thoai khong hop le')
-});
+  preferredDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  preferredTime: z.string().regex(/^\d{2}:\d{2}$/),
+  description: z.string().min(10).max(500),
+  contactName: z.string().min(2).max(100),
+  contactPhone: z.string().regex(/^\d{10,11}$/)
+}).strict();
+const bookingQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(20).default(10)
+}).strict();
+const bookingIdParamsSchema = z.object({
+  id: z.string().uuid('ID lich hen khong hop le')
+}).strict();
 
 router.use(authenticateToken);
 
-router.post('/', validate(createBookingSchema), bookingController.createBooking);
-router.get('/me', bookingController.getMyBookings);
-router.delete('/:id', bookingController.cancelBooking);
+router.post('/', bookingCreateIpRateLimiter, bookingCreateRateLimiter, validate(createBookingSchema), bookingController.createBooking);
+router.get('/me', validateQuery(bookingQuerySchema), bookingController.getMyBookings);
+router.delete('/:id', validateParams(bookingIdParamsSchema), bookingController.cancelBooking);
 
 export default router;

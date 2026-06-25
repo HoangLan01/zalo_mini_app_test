@@ -25,6 +25,17 @@ const getCookieMaxAge = () => {
   return amount * ({ m: 60_000, h: 3_600_000, d: 86_400_000 }[match[2]] || 3_600_000);
 };
 
+const getCookieDomain = () => {
+  const value = process.env.COOKIE_DOMAIN?.trim();
+  return value || undefined;
+};
+
+const getAdminCookieSameSite = (): 'lax' | 'strict' | 'none' => {
+  const value = (process.env.ADMIN_COOKIE_SAME_SITE || 'strict').trim().toLowerCase();
+  if (value === 'lax' || value === 'strict' || value === 'none') return value;
+  return 'strict';
+};
+
 export const signAdminToken = (payload: AdminTokenPayload) => jwt.sign(payload, getSecret(), {
   expiresIn: (process.env.ADMIN_JWT_EXPIRES_IN || '8h') as any
 });
@@ -41,8 +52,9 @@ export const setAdminSessionCookie = (res: Response, token: string) => {
   res.cookie(ADMIN_SESSION_COOKIE, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    sameSite: getAdminCookieSameSite(),
     path: '/',
+    domain: getCookieDomain(),
     maxAge: getCookieMaxAge()
   });
 };
@@ -51,7 +63,8 @@ export const clearAdminSessionCookie = (res: Response) => {
   res.clearCookie(ADMIN_SESSION_COOKIE, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    path: '/'
+    sameSite: getAdminCookieSameSite(),
+    path: '/',
+    domain: getCookieDomain()
   });
 };

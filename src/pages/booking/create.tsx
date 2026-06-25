@@ -4,6 +4,7 @@ import { useNavigate } from 'zmp-ui';
 import PageHeader from '@/components/PageHeader';
 import { useUserStore } from '@/store/userStore';
 import { apiCall } from '@/services/api';
+import { logDevError } from '@/utils/zaloHelper';
 
 const timeSlots = [
   { value: '08:00', label: '8:00', period: 'Sang' },
@@ -95,7 +96,7 @@ const BookingCreatePage: React.FC = () => {
         navigate('/booking', { replace: true });
       }, 1000);
     } catch (error) {
-      console.error('Error in booking submission:', error);
+      logDevError('Error in booking submission:', error);
       snackbar.openSnackbar({ type: 'error', text: error instanceof Error ? error.message : 'Không thể gửi thông tin đặt lịch. Vui lòng thử lại.' });
     } finally {
       setLoading(false);

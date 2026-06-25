@@ -70,7 +70,7 @@ const BookingIndexPage: React.FC = () => {
   const loadBookings = async () => {
     setLoading(true);
     try {
-      const data = await apiCall<BookingItem[]>('/api/bookings/me?page=1&limit=50');
+      const data = await apiCall<BookingItem[]>('/api/bookings/me?page=1&limit=20');
       setBookings(data);
     } catch (error) {
       snackbar.openSnackbar({ type: 'error', text: error instanceof Error ? error.message : 'Không thể tải lịch hẹn' });

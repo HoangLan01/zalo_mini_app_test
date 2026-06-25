@@ -8,18 +8,18 @@ import * as authController from '../controllers/auth.controller';
 const router = Router();
 
 const loginSchema = z.object({
-  accessToken: z.string().min(1, 'accessToken không được để trống')
-});
+  accessToken: z.string().min(1)
+}).strict();
 
 const adminLoginSchema = z.object({
-  email: z.string().email('Email không hợp lệ'),
-  password: z.string().min(1, 'Mật khẩu không được để trống')
-});
+  email: z.string().email(),
+  password: z.string().min(1)
+}).strict();
 
 const changePasswordSchema = z.object({
   currentPassword: z.string().min(1),
   newPassword: z.string().min(12)
-});
+}).strict();
 
 router.post('/login', validate(loginSchema), authController.login);
 router.post('/dev-login', authController.devLogin);

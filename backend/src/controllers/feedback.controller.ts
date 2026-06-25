@@ -1,17 +1,15 @@
-// src/controllers/feedback.controller.ts
 import { Request, Response, NextFunction } from 'express';
 import * as feedbackService from '../services/feedback.service';
 import { FeedbackStatus } from '@prisma/client';
+import { sendPaginated, sendSuccess } from '../utils/apiResponse';
+import { AppError } from '../utils/appError';
 
 export const createFeedback = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user!.userId;
     const feedback = await feedbackService.createFeedback(userId, req.body);
-    res.status(201).json({ success: true, data: feedback });
-  } catch (error: any) {
-    if (['MISSING_TITLE', 'MISSING_CATEGORY', 'MISSING_DESCRIPTION', 'MISSING_SERVICE_UNIT', 'INVALID_SATISFACTION_SCORE', 'INVALID_CONTACT_PHONE', 'TOO_MANY_IMAGES'].includes(error.message)) {
-      return res.status(400).json({ success: false, error: { code: error.message, message: 'Dữ liệu phản ánh không hợp lệ' } });
-    }
+    return sendSuccess(res, feedback, 201);
+  } catch (error) {
     next(error);
   }
 };
@@ -20,11 +18,11 @@ export const getMyFeedbacks = async (req: Request, res: Response, next: NextFunc
   try {
     const userId = req.user!.userId;
     const status = req.query.status as FeedbackStatus | undefined;
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = Math.min(parseInt(req.query.limit as string) || 10, 20);
+    const page = Number(req.query.page);
+    const limit = Number(req.query.limit);
 
     const result = await feedbackService.getFeedbacksByUser(userId, { status, page, limit });
-    res.status(200).json({ success: true, ...result });
+    return sendPaginated(res, result.data, result.pagination);
   } catch (error) {
     next(error);
   }
@@ -37,10 +35,10 @@ export const getFeedbackDetails = async (req: Request, res: Response, next: Next
 
     const feedback = await feedbackService.getFeedbackById(feedbackId, userId);
     if (!feedback) {
-      return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Không tìm thấy phản ánh' } });
+      throw new AppError('NOT_FOUND', 'Không tìm thấy phản ánh', 404);
     }
 
-    res.status(200).json({ success: true, data: feedback });
+    return sendSuccess(res, feedback);
   } catch (error) {
     next(error);
   }
@@ -49,7 +47,7 @@ export const getFeedbackDetails = async (req: Request, res: Response, next: Next
 export const getAdminFeedbacks = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const data = await feedbackService.getAdminFeedbacks(req.query);
-    res.status(200).json({ success: true, data });
+    return sendSuccess(res, data);
   } catch (error) {
     next(error);
   }
@@ -58,7 +56,7 @@ export const getAdminFeedbacks = async (req: Request, res: Response, next: NextF
 export const getAdminFeedbackSummary = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const data = await feedbackService.getAdminFeedbackSummary();
-    res.status(200).json({ success: true, data });
+    return sendSuccess(res, data);
   } catch (error) {
     next(error);
   }
@@ -67,14 +65,8 @@ export const getAdminFeedbackSummary = async (req: Request, res: Response, next:
 export const updateFeedbackStatusByAdmin = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const data = await feedbackService.updateFeedbackStatusByAdmin(req.params.id, req.body);
-    res.status(200).json({ success: true, data });
-  } catch (error: any) {
-    if (error.message === 'NOT_FOUND') {
-      return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Không tìm thấy phản ánh' } });
-    }
-    if (error.message === 'MISSING_RESPONSE') {
-      return res.status(400).json({ success: false, error: { code: 'MISSING_RESPONSE', message: 'Vui lòng nhập phản hồi khi hoàn tất phản ánh' } });
-    }
+    return sendSuccess(res, data);
+  } catch (error) {
     next(error);
   }
 };

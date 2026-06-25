@@ -4,7 +4,7 @@ import { useNavigate } from 'zmp-ui';
 import { openChat, chooseImage } from 'zmp-sdk/apis';
 import PageHeader from '@/components/PageHeader';
 import { useUserStore } from '@/store/userStore';
-import { requestPhoneNumber } from '@/utils/zaloHelper';
+import { logDevError, requestPhoneNumber } from '@/utils/zaloHelper';
 
 const ReviewPage: React.FC = () => {
   const navigate = useNavigate();
@@ -57,7 +57,7 @@ const ReviewPage: React.FC = () => {
       const { filePaths } = await chooseImage({ count: 3, sourceType: ['album', 'camera'] });
       setImages([...images, ...filePaths].slice(0, 3));
     } catch (e) {
-      console.log(e);
+      logDevError('Error picking review images:', e);
     }
   };
 
@@ -110,7 +110,7 @@ const ReviewPage: React.FC = () => {
         navigate('/', { replace: true });
       }, 1500);
     } catch (error) {
-      console.error('Error sending review to OA:', error);
+      logDevError('Error sending review to OA:', error);
       snackbar.openSnackbar({ type: 'error', text: 'Không thể gửi đánh giá. Vui lòng thử lại.' });
     } finally {
       setSubmitting(false);

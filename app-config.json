@@ -2,7 +2,6 @@
   "app": {
     "title": "Phường Tùng Thiện",
     "headerColor": "#246BFD",
-    "statusBarColor": "#246BFD",
     "textColor": "white",
     "statusBar": "normal",
     "actionBarHidden": true
@@ -11,6 +10,7 @@
   "listSyncJS": [],
   "listAsyncJS": [],
   "pages": [
+    "/",
     "/feedback",
     "/feedback-create",
     "/feedback-detail",

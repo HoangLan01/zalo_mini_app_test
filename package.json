@@ -1,7 +1,7 @@
 {
   "name": "my-app-test-1",
   "version": "1.0.0",
-  "description": "To make it easy for you to get started with GitLab, here's a list of recommended next steps.",
+  "description": "Zalo Mini App cho Phường Tùng Thiện với các tính năng phản ánh, đặt lịch và tiện ích hành chính.",
   "main": "index.js",
   "scripts": {
     "start": "vite",
@@ -10,18 +10,10 @@
     "check:vi-encoding": "node scripts/check-vietnamese-encoding.mjs",
     "format": "prettier --write \"src/**/*.{ts,tsx}\""
   },
-  "repository": {
-    "type": "git",
-    "url": "git+ssh://git@gitlab.com/teik_1b/mini-app-education.git"
-  },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "module",
-  "bugs": {
-    "url": "https://gitlab.com/teik_1b/mini-app-education/issues"
-  },
-  "homepage": "https://gitlab.com/teik_1b/mini-app-education#readme",
   "dependencies": {
     "dompurify": "^3.4.5",
     "react": "^18.2.0",

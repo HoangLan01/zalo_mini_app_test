@@ -7,7 +7,7 @@ const DvcPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    openExternalUrl('https://dichvucong.gov.vn', 'Dịch vụ công Quốc gia');
+    openExternalUrl('https://dichvucong.gov.vn');
     const timer = setTimeout(() => setLoading(false), 2000);
     return () => clearTimeout(timer);
   }, []);
@@ -26,7 +26,7 @@ const DvcPage: React.FC = () => {
             <Text style={{ textAlign: 'center', marginBottom: '16px', color: '#1A1A1A' }}>
               Nếu hệ thống không tự động chuyển hướng, vui lòng nhấn nút bên dưới.
             </Text>
-            <Button onClick={() => openExternalUrl('https://dichvucong.gov.vn', 'Dịch vụ công Quốc gia')}>
+            <Button onClick={() => openExternalUrl('https://dichvucong.gov.vn')}>
               Mở lại Dịch vụ công
             </Button>
           </>

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Page, Box, Text, Tabs, useNavigate, useSnackbar } from 'zmp-ui';
+import { Page, Box, Text, Tabs, useLocation, useNavigate, useSnackbar } from 'zmp-ui';
 import PageHeader from '@/components/PageHeader';
 import { apiCall } from '@/services/api';
 
@@ -24,12 +24,12 @@ const statusLabels: Record<FeedbackStatus, string> = {
   PENDING: 'Đang tiếp nhận',
   PROCESSING: 'Đang xử lý',
   TRANSFERRED: 'Đã chuyển đơn vị',
-  RESOLVED: 'Đã giải quyết',
+  RESOLVED: 'Đã giải quyết'
 };
 
 const typeLabels: Record<FeedbackType, string> = {
   FIELD: 'Hiện trường',
-  SERVICE_ATTITUDE: 'Thái độ phục vụ',
+  SERVICE_ATTITUDE: 'Thái độ phục vụ'
 };
 
 const statusBadge = (status: FeedbackStatus) => {
@@ -41,20 +41,22 @@ const statusBadge = (status: FeedbackStatus) => {
 const formatDate = (value: string) => new Intl.DateTimeFormat('vi-VN', {
   day: '2-digit',
   month: '2-digit',
-  year: 'numeric',
+  year: 'numeric'
 }).format(new Date(value));
 
 const FeedbackIndexPage: React.FC = () => {
   const navigate = useNavigate();
+  const { state } = useLocation();
   const snackbar = useSnackbar();
   const [activeTab, setActiveTab] = useState('mine');
   const [feedbacks, setFeedbacks] = useState<FeedbackItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const selectedType = ((state as { type?: FeedbackType } | undefined)?.type || 'FIELD') as FeedbackType;
 
   const loadFeedbacks = async () => {
     setLoading(true);
     try {
-      const data = await apiCall<FeedbackItem[]>('/api/feedbacks/me?page=1&limit=50');
+      const data = await apiCall<FeedbackItem[]>('/api/feedbacks/me?page=1&limit=20');
       setFeedbacks(data);
     } catch (err) {
       snackbar.openSnackbar({ type: 'error', text: err instanceof Error ? err.message : 'Không thể tải danh sách phản ánh' });
@@ -81,16 +83,18 @@ const FeedbackIndexPage: React.FC = () => {
 
       <Box style={{ paddingBottom: '160px' }}>
         <div style={{
-          margin: '12px 16px', padding: '16px 20px',
+          margin: '12px 16px',
+          padding: '16px 20px',
           background: 'var(--gradient-hero)',
           borderRadius: 'var(--radius-xl)',
-          display: 'flex', justifyContent: 'space-around',
+          display: 'flex',
+          justifyContent: 'space-around',
           boxShadow: 'var(--shadow-glow)'
         }}>
           {[
             { count: pendingCount, label: 'Chờ xử lý' },
             { count: processingCount, label: 'Đang xử lý' },
-            { count: resolvedCount, label: 'Đã xong' },
+            { count: resolvedCount, label: 'Đã xong' }
           ].map(stat => (
             <div key={stat.label} style={{ textAlign: 'center' }}>
               <Text style={{ color: '#fff', fontWeight: 800, fontSize: '22px', lineHeight: '1' }}>{stat.count}</Text>
@@ -143,11 +147,12 @@ const FeedbackIndexPage: React.FC = () => {
       </Box>
 
       <div
-        onClick={() => navigate('/feedback-create', { state: { type: 'FIELD' } })}
+        onClick={() => navigate('/feedback-create', { state: { type: selectedType } })}
         className="fab active-scale animate-bounce-in delay-300"
       >
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
-          <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+          <line x1="12" y1="5" x2="12" y2="19" />
+          <line x1="5" y1="12" x2="19" y2="12" />
         </svg>
       </div>
     </Page>

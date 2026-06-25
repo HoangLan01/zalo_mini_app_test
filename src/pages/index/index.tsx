@@ -194,9 +194,9 @@ const IndexPage: React.FC = () => {
     navigate(path, state ? { state } : undefined);
   };
 
-  const openFeedbackCreate = (type: 'FIELD' | 'SERVICE_ATTITUDE') => {
+  const openFeedbackList = (type: 'FIELD' | 'SERVICE_ATTITUDE') => {
     setShowFeedbackTypeModal(false);
-    navigateFromHome('/feedback-create', { type });
+    navigateFromHome('/feedback', { type });
   };
 
   const handleOpenChat = async () => {
@@ -271,7 +271,7 @@ const IndexPage: React.FC = () => {
     { title: 'Trang TTĐT', icon: 'globe' as IconName, tone: 'violet', path: '/ttdt' },
     { title: 'Sự kiện', icon: 'spark' as IconName, tone: 'orange', path: '/events' },
     { title: 'Di tích', icon: 'landmark' as IconName, tone: 'emerald', path: '/heritage' },
-    { title: 'Kiến thức CDS', icon: 'bulb' as IconName, tone: 'yellow', path: '/quiz', isNew: true },
+    { title: 'Kiến thức CĐS', icon: 'bulb' as IconName, tone: 'yellow', path: '/quiz', isNew: true },
     { title: 'Giáo dục', icon: 'education' as IconName, tone: 'pink', path: '/education' },
     { title: 'Quy hoạch', icon: 'map' as IconName, tone: 'teal', path: '/planning' },
   ];
@@ -430,7 +430,7 @@ const IndexPage: React.FC = () => {
             </header>
 
             <div className="feedback-choice-body">
-              <button type="button" className="feedback-choice-card" onClick={() => openFeedbackCreate('SERVICE_ATTITUDE')}>
+              <button type="button" className="feedback-choice-card" onClick={() => openFeedbackList('SERVICE_ATTITUDE')}>
                 <span className="feedback-choice-icon feedback-choice-icon-blue" aria-hidden="true">
                   <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M16 11a4 4 0 1 0-8 0" />
@@ -447,10 +447,7 @@ const IndexPage: React.FC = () => {
               <button
                 type="button"
                 className="feedback-choice-card"
-                onClick={() => {
-                  setShowFeedbackTypeModal(false);
-                  navigateFromHome('/feedback');
-                }}
+                onClick={() => openFeedbackList('FIELD')}
               >
                 <span className="feedback-choice-icon feedback-choice-icon-orange" aria-hidden="true">
                   <svg width="29" height="29" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round">

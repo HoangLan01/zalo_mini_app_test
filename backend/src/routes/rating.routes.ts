@@ -1,6 +1,6 @@
-// src/routes/rating.routes.ts
 import { Router } from 'express';
 import { z } from 'zod';
+import { ratingCreateIpRateLimiter, ratingCreateRateLimiter } from '../middleware/rateLimit.middleware';
 import { validate } from '../middleware/validate.middleware';
 import { authenticateToken } from '../middleware/auth.middleware';
 import * as ratingController from '../controllers/rating.controller';
@@ -13,9 +13,9 @@ const createRatingSchema = z.object({
   timelinessScore: z.number().int().min(1).max(5),
   outcomeScore: z.number().int().min(1).max(5),
   comment: z.string().max(500).optional()
-});
+}).strict();
 
-router.post('/', authenticateToken, validate(createRatingSchema), ratingController.createRating);
-router.get('/summary', ratingController.getRatingSummary); // Public route
+router.post('/', authenticateToken, ratingCreateIpRateLimiter, ratingCreateRateLimiter, validate(createRatingSchema), ratingController.createRating);
+router.get('/summary', ratingController.getRatingSummary);
 
 export default router;

@@ -1,43 +1,28 @@
-// src/controllers/upload.controller.ts
 import { Request, Response, NextFunction } from 'express';
 import { uploadImages } from '../services/upload.service';
+import { sendSuccess } from '../utils/apiResponse';
+import { AppError } from '../utils/appError';
 
 export const upload = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const files = req.files as Express.Multer.File[];
     const purpose = String(req.query.purpose || req.body?.purpose || '');
-    
+
     if (!files || files.length === 0) {
-      return res.status(400).json({
-        success: false,
-        error: { code: 'INVALID_FILE', message: 'Vui lòng đính kèm file ảnh' }
-      });
+      throw new AppError('INVALID_FILE', 'Vui lòng đính kèm ít nhất 1 file ảnh', 400);
     }
 
     if (purpose === 'event' && !['ADMIN', 'SUPER_ADMIN'].includes(req.user?.role || '')) {
-      return res.status(403).json({
-        success: false,
-        error: { code: 'FORBIDDEN', message: 'Bạn không có quyền tải ảnh sự kiện' }
-      });
+      throw new AppError('FORBIDDEN', 'Bạn không có quyền tải ảnh sự kiện', 403);
     }
 
-    const urls = await uploadImages(files, purpose === 'event'
-      ? { folder: 'tung-thien/events', maxFiles: 10 }
-      : { folder: 'tung-thien/feedbacks', maxFiles: 3 });
+    const urls = await uploadImages(
+      files,
+      purpose === 'event' ? { folder: 'tung-thien/events', maxFiles: 10 } : { folder: 'tung-thien/feedbacks', maxFiles: 3 }
+    );
 
-    res.status(200).json({
-      success: true,
-      data: { urls }
-    });
-  } catch (error: any) {
-    const message = String(error.message || '');
-    if (message.includes('tối đa') || message.includes('vượt quá') || message.includes('định dạng') ||
-      message.includes('toi da') || message.includes('vuot qua') || message.includes('dinh dang')) {
-      return res.status(400).json({
-        success: false,
-        error: { code: 'INVALID_FILE', message }
-      });
-    }
+    return sendSuccess(res, { urls });
+  } catch (error) {
     next(error);
   }
 };

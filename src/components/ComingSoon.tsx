@@ -50,7 +50,7 @@ const ComingSoon: React.FC<ComingSoonProps> = ({ title = 'Đang phát triển' }
           {title}
         </Text>
         <Text style={{ color: 'var(--text-muted)', marginBottom: '28px', fontSize: '14px', lineHeight: '1.6' }}>
-          Tính năng này đang được xây dựng và sẽ sớm ra mắt. Cảm ơn sự kiên nhẫn của bạn!
+          Tính năng này đang được xây dựng và sẽ sớm ra mắt. Cảm ơn sự kiên nhẫn của bạn.
         </Text>
         <button
           onClick={() => navigate(-1)}

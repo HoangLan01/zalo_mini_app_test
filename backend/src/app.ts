@@ -1,4 +1,3 @@
-// src/app.ts
 import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
@@ -6,13 +5,14 @@ import {
   adminBookingRateLimiter,
   adminQuizRateLimiter,
   authRateLimiter,
+  globalIpRateLimiter,
   globalRateLimiter,
   publicQuizRateLimiter
 } from './middleware/rateLimit.middleware';
 import { errorHandler } from './middleware/errorHandler.middleware';
-import logger from './utils/logger';
+import logger, { sanitizeUrlForLogging } from './utils/logger';
+import { sendError, sendSuccess } from './utils/apiResponse';
 
-// Routes
 import authRoutes from './routes/auth.routes';
 import feedbackRoutes from './routes/feedback.routes';
 import bookingRoutes from './routes/booking.routes';
@@ -28,49 +28,69 @@ import adminFeedbackRoutes from './routes/adminFeedback.routes';
 import adminAccountRoutes from './routes/adminAccount.routes';
 
 const app = express();
-
-// Trust the first reverse proxy so rate limiting uses the real client IP
-// from X-Forwarded-For instead of the local Nginx address.
-app.set('trust proxy', 1);
-
-// 1. Webhook route phải dùng express.raw ĐỂ preserve raw body cho verify signature
-app.use('/webhook/zalo', express.raw({ type: 'application/json' }), webhookRoutes);
-
-// 2. HTTP Security Headers
-app.use(helmet());
-
-// 3. CORS — cho phép frontend dev gọi API (frontend: 5173-5175, backend: 3000)
+const isDevelopment = process.env.NODE_ENV === 'development';
 const allowedOrigins = [process.env.APP_URL, process.env.ADMIN_APP_URL]
   .flatMap(value => (value || '').split(','))
   .map(value => value.trim())
   .filter(Boolean);
+
+app.set('trust proxy', 1);
+app.disable('x-powered-by');
+
+app.use('/webhook/zalo', express.raw({ type: 'application/json' }), webhookRoutes);
+
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'none'"],
+      baseUri: ["'none'"],
+      frameAncestors: ["'none'"],
+      formAction: ["'self'"],
+      imgSrc: ["'self'", 'data:', 'https://res.cloudinary.com'],
+      objectSrc: ["'none'"],
+      scriptSrc: ["'none'"],
+      styleSrc: ["'none'"]
+    }
+  },
+  crossOriginEmbedderPolicy: false,
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' }
+}));
+app.use((req, res, next) => {
+  res.setHeader('Permissions-Policy', 'camera=(), geolocation=(), microphone=()');
+  next();
+});
+
+if (isDevelopment) {
+  logger.warn('CORS is running in open development mode.');
+} else if (allowedOrigins.length === 0) {
+  logger.warn('No CORS origins configured. Browser cross-origin requests will be rejected.');
+}
+
 app.use(cors({
-  origin: process.env.NODE_ENV === 'development'
-    ? true
-    : (origin, callback) => callback(null, !origin || allowedOrigins.includes(origin)),
+  origin: (origin, callback) => {
+    if (isDevelopment) return callback(null, true);
+    if (!origin) return callback(null, true);
+    return callback(null, allowedOrigins.includes(origin));
+  },
   credentials: true
 }));
 
-// 4. Body Parser (cho các route khác)
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// 5. Request Logging
 app.use((req, res, next) => {
   const start = Date.now();
   res.on('finish', () => {
     const duration = Date.now() - start;
-    logger.info(`${req.method} ${req.originalUrl} ${res.statusCode} - ${duration}ms`);
+    logger.info(`${req.method} ${sanitizeUrlForLogging(req.originalUrl)} ${res.statusCode} - ${duration}ms`);
   });
   next();
 });
 
-// 6. Rate Limiting
-app.use('/api', globalRateLimiter);
+app.use('/api', globalIpRateLimiter, globalRateLimiter);
 
-// 7. API Routes
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  return sendSuccess(res, { status: 'ok', timestamp: new Date().toISOString() });
 });
 
 app.use('/api/auth', authRateLimiter, authRoutes);
@@ -86,15 +106,10 @@ app.use('/api/admin/bookings', adminBookingRateLimiter, adminBookingRoutes);
 app.use('/api/admin/feedbacks', adminBookingRateLimiter, adminFeedbackRoutes);
 app.use('/api/admin', adminQuizRateLimiter, adminAccountRoutes);
 
-// 8. 404 Handler
-app.use((req, res, next) => {
-  res.status(404).json({
-    success: false,
-    error: { code: 'NOT_FOUND', message: 'Tài nguyên không tồn tại' }
-  });
+app.use((req, res) => {
+  return sendError(res, 'NOT_FOUND', 'Tài nguyên không tồn tại', 404);
 });
 
-// 9. Global Error Handler
 app.use(errorHandler);
 
 export default app;
