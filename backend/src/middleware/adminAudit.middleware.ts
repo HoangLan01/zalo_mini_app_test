@@ -4,7 +4,7 @@ import logger from '../utils/logger';
 
 const getAuditDescriptor = (req: Request) => {
   const path = req.originalUrl.split('?')[0];
-  const id = path.match(/\/(?:bookings|events|topics|sets|questions)\/([^/]+)/)?.[1];
+  const id = path.match(/\/(?:bookings|feedbacks|events|topics|sets|questions)\/([^/]+)/)?.[1];
   const actionSuffix =
     path.endsWith('/publish') ? 'PUBLISH' :
     path.endsWith('/close') ? 'CLOSE' :
@@ -14,6 +14,7 @@ const getAuditDescriptor = (req: Request) => {
     req.method === 'DELETE' ? 'ARCHIVE' : req.method;
   const entityType =
     path.includes('/bookings') ? 'BOOKING' :
+    path.includes('/feedbacks') ? 'FEEDBACK' :
     path.includes('/events') ? 'EVENT' :
     path.includes('/quiz') ? 'QUIZ_CONTENT' : 'ADMIN_RESOURCE';
   return { action: `${entityType}_${actionSuffix}`, entityType, id };

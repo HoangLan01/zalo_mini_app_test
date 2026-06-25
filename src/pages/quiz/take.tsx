@@ -26,29 +26,32 @@ const QuizTakePage: React.FC = () => {
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
-  const handleSubmit = useCallback(async (autoSubmit = false) => {
-    if (!currentSet || !attemptIdRef.current || isSubmitting) return;
-    setIsSubmitting(true);
-    clearInterval(timerRef.current);
+  const handleSubmit = useCallback(
+    async (autoSubmit = false) => {
+      if (!currentSet || !attemptIdRef.current || isSubmitting) return;
+      setIsSubmitting(true);
+      clearInterval(timerRef.current);
 
-    try {
-      const timeTaken = currentSet.timeLimit - timeLeftRef.current;
-      await submitAttempt(attemptIdRef.current, {
-        timeTaken,
-        expired: autoSubmit,
-        answers: Object.entries(answers).map(([questionId, selectedOptionId]) => ({ questionId, selectedOptionId }))
-      });
+      try {
+        const timeTaken = currentSet.timeLimit - timeLeftRef.current;
+        await submitAttempt(attemptIdRef.current, {
+          timeTaken,
+          expired: autoSubmit,
+          answers: Object.entries(answers).map(([questionId, selectedOptionId]) => ({ questionId, selectedOptionId })),
+        });
 
-      if (autoSubmit) {
-        openSnackbar({ text: 'Đã hết thời gian làm bài!', type: 'warning' });
+        if (autoSubmit) {
+          openSnackbar({ text: 'Đã hết thời gian làm bài!', type: 'warning' });
+        }
+
+        navigate('/quiz-result', { state: { setId: currentSet.id }, replace: true });
+      } catch (error: any) {
+        openSnackbar({ text: error.message, type: 'error' });
+        setIsSubmitting(false);
       }
-
-      navigate('/quiz-result', { state: { setId: currentSet.id }, replace: true });
-    } catch (error: any) {
-      openSnackbar({ text: error.message, type: 'error' });
-      setIsSubmitting(false);
-    }
-  }, [answers, currentSet, isSubmitting, navigate, submitAttempt]); // eslint-disable-line react-hooks/exhaustive-deps
+    },
+    [answers, currentSet, isSubmitting, navigate, openSnackbar, submitAttempt]
+  );
 
   useEffect(() => {
     let mounted = true;
@@ -63,7 +66,7 @@ const QuizTakePage: React.FC = () => {
           return;
         }
 
-        const attempt = set.attempt || await startAttempt(set.id);
+        const attempt = set.attempt || (await startAttempt(set.id));
         attemptIdRef.current = attempt.id;
         timeLeftRef.current = set.timeLimit;
         setTimeLeft(set.timeLimit);
@@ -78,13 +81,13 @@ const QuizTakePage: React.FC = () => {
       mounted = false;
       clearInterval(timerRef.current);
     };
-  }, [fetchSet, navigate, setId, startAttempt]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fetchSet, navigate, openSnackbar, setId, startAttempt]);
 
   useEffect(() => {
     if (!currentSet || !attemptIdRef.current) return;
 
     timerRef.current = setInterval(() => {
-      setTimeLeft(prev => {
+      setTimeLeft((prev) => {
         const next = prev - 1;
         timeLeftRef.current = Math.max(0, next);
         if (next <= 0) {
@@ -114,8 +117,8 @@ const QuizTakePage: React.FC = () => {
   const progressPercent = ((currentQuestionIndex + 1) / currentSet.questions.length) * 100;
 
   const handleNext = () => {
-    if (currentQuestionIndex < currentSet.questions!.length - 1) {
-      setCurrentQuestionIndex(prev => prev + 1);
+    if (currentQuestionIndex < currentSet.questions.length - 1) {
+      setCurrentQuestionIndex((prev) => prev + 1);
     } else {
       setShowSubmitModal(true);
     }
@@ -130,12 +133,14 @@ const QuizTakePage: React.FC = () => {
           <Text style={{ fontSize: '14px', fontWeight: 700, color: '#374151' }}>
             Câu {currentQuestionIndex + 1}/{currentSet.questions.length}
           </Text>
-          <Text style={{
-            fontSize: '14px',
-            fontWeight: 800,
-            color: timeLeft < 60 ? '#EF4444' : '#4B5563',
-            fontVariantNumeric: 'tabular-nums'
-          }}>
+          <Text
+            style={{
+              fontSize: '14px',
+              fontWeight: 800,
+              color: timeLeft < 60 ? '#EF4444' : '#4B5563',
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
             {formatTime(timeLeft)}
           </Text>
         </div>
@@ -157,7 +162,7 @@ const QuizTakePage: React.FC = () => {
             return (
               <button
                 key={option.id}
-                onClick={() => setAnswers(prev => ({ ...prev, [currentQuestion.id]: option.id }))}
+                onClick={() => setAnswers((prev) => ({ ...prev, [currentQuestion.id]: option.id }))}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -166,27 +171,27 @@ const QuizTakePage: React.FC = () => {
                   backgroundColor: isSelected ? '#EFF6FF' : '#FFFFFF',
                   border: isSelected ? '2px solid #246BFD' : '1px solid #D1D5DB',
                   borderRadius: '12px',
-                  gap: '12px'
+                  gap: '12px',
                 }}
               >
-                <span style={{
-                  width: '28px',
-                  height: '28px',
-                  borderRadius: '50%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: isSelected ? '#246BFD' : '#F3F4F6',
-                  color: isSelected ? '#FFFFFF' : '#4B5563',
-                  fontWeight: 700,
-                  fontSize: '14px',
-                  flexShrink: 0
-                }}>
+                <span
+                  style={{
+                    width: '28px',
+                    height: '28px',
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: isSelected ? '#246BFD' : '#F3F4F6',
+                    color: isSelected ? '#FFFFFF' : '#4B5563',
+                    fontWeight: 700,
+                    fontSize: '14px',
+                    flexShrink: 0,
+                  }}
+                >
                   {alphabet}
                 </span>
-                <Text style={{ fontSize: '15px', color: isSelected ? '#1E3A8A' : '#374151', flex: 1 }}>
-                  {option.content}
-                </Text>
+                <Text style={{ fontSize: '15px', color: isSelected ? '#1E3A8A' : '#374151', flex: 1 }}>{option.content}</Text>
               </button>
             );
           })}
@@ -197,7 +202,7 @@ const QuizTakePage: React.FC = () => {
         <Button
           variant="secondary"
           disabled={currentQuestionIndex === 0}
-          onClick={() => setCurrentQuestionIndex(prev => Math.max(0, prev - 1))}
+          onClick={() => setCurrentQuestionIndex((prev) => Math.max(0, prev - 1))}
           style={{ flex: 1 }}
         >
           Quay lại
@@ -213,7 +218,7 @@ const QuizTakePage: React.FC = () => {
         onClose={() => setShowSubmitModal(false)}
         actions={[
           { text: 'Kiểm tra lại', onClick: () => setShowSubmitModal(false), close: true },
-          { text: 'Nộp ngay', onClick: () => handleSubmit(false), highLight: true }
+          { text: 'Nộp ngay', onClick: () => handleSubmit(false), highLight: true },
         ]}
         description={`Bạn đã trả lời ${Object.keys(answers).length}/${currentSet.questions.length} câu hỏi. Bạn có chắc chắn muốn nộp bài?`}
       />

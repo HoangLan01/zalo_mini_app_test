@@ -21,14 +21,15 @@ const QuizIndexPage: React.FC = () => {
     <Page className="page" style={{ backgroundColor: 'var(--surface)', height: '100%', display: 'flex', flexDirection: 'column' }}>
       <PageHeader title={selectedTopic ? selectedTopic.title : 'Kiến thức CĐS'} />
 
-      <div className="animate-fade-in-up" style={{
-        padding: '24px 20px',
-        background: 'var(--gradient-hero)',
-        color: '#fff'
-      }}>
-        <Text style={{ color: '#fff', fontSize: '18px', fontWeight: 800 }}>
-          Đánh giá năng lực số
-        </Text>
+      <div
+        className="animate-fade-in-up"
+        style={{
+          padding: '24px 20px',
+          background: 'var(--gradient-hero)',
+          color: '#fff',
+        }}
+      >
+        <Text style={{ color: '#fff', fontSize: '18px', fontWeight: 800 }}>Đánh giá năng lực số</Text>
         <Text style={{ color: 'rgba(255,255,255,0.86)', fontSize: '13px', lineHeight: 1.5, marginTop: '8px' }}>
           Chọn chủ đề, tham gia trắc nghiệm và theo dõi xếp hạng theo từng bộ câu hỏi.
         </Text>
@@ -43,7 +44,7 @@ const QuizIndexPage: React.FC = () => {
               background: 'transparent',
               color: 'var(--primary)',
               fontWeight: 700,
-              padding: '0 0 12px'
+              padding: '0 0 12px',
             }}
           >
             ← Tất cả chủ đề
@@ -74,7 +75,7 @@ const QuizIndexPage: React.FC = () => {
                   textAlign: 'left',
                   padding: '16px',
                   borderRadius: 'var(--radius-lg)',
-                  background: '#fff'
+                  background: '#fff',
                 }}
               >
                 <Text style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-primary)' }}>{topic.title}</Text>
@@ -109,12 +110,10 @@ const QuizIndexPage: React.FC = () => {
                   style={{
                     padding: '16px',
                     borderRadius: 'var(--radius-lg)',
-                    borderLeft: `4px solid ${attempt ? 'var(--success)' : isClosed ? 'var(--text-muted)' : 'var(--primary)'}`
+                    borderLeft: `4px solid ${attempt ? 'var(--success)' : isClosed ? 'var(--text-muted)' : 'var(--primary)'}`,
                   }}
                 >
-                  <Text style={{ fontSize: '15px', fontWeight: 800, color: 'var(--text-primary)' }}>
-                    {quiz.title}
-                  </Text>
+                  <Text style={{ fontSize: '15px', fontWeight: 800, color: 'var(--text-primary)' }}>{quiz.title}</Text>
                   {quiz.description && (
                     <Text style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '8px', lineHeight: 1.5 }}>
                       {quiz.description}
@@ -145,21 +144,24 @@ const QuizIndexPage: React.FC = () => {
                         color: 'var(--success)',
                         border: '1.5px solid var(--success)',
                         borderRadius: 'var(--radius-md)',
-                        fontWeight: 700
+                        fontWeight: 700,
                       }}
                     >
-                      Xem kết quả & xếp hạng
+                      Xem kết quả và xếp hạng
                     </button>
                   ) : isClosed ? (
-                    <button disabled style={{
-                      width: '100%',
-                      padding: '11px',
-                      background: 'hsl(220,10%,94%)',
-                      color: 'var(--text-muted)',
-                      border: 'none',
-                      borderRadius: 'var(--radius-md)',
-                      fontWeight: 700
-                    }}>
+                    <button
+                      disabled
+                      style={{
+                        width: '100%',
+                        padding: '11px',
+                        background: 'hsl(220,10%,94%)',
+                        color: 'var(--text-muted)',
+                        border: 'none',
+                        borderRadius: 'var(--radius-md)',
+                        fontWeight: 700,
+                      }}
+                    >
                       Đã đóng
                     </button>
                   ) : (
@@ -171,7 +173,7 @@ const QuizIndexPage: React.FC = () => {
                         padding: '11px',
                         border: 'none',
                         borderRadius: 'var(--radius-md)',
-                        fontWeight: 700
+                        fontWeight: 700,
                       }}
                     >
                       Bắt đầu làm bài

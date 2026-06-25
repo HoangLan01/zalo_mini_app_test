@@ -7,16 +7,17 @@ import { eventCategoryLabel, PublicEventStatus, useEventStore } from '@/store/ev
 const statusTabs: Array<{ key: PublicEventStatus; label: string }> = [
   { key: 'upcoming', label: 'Sắp diễn ra' },
   { key: 'ongoing', label: 'Đang diễn ra' },
-  { key: 'past', label: 'Đã kết thúc' }
+  { key: 'past', label: 'Đã kết thúc' },
 ];
 
-const formatDateTime = (value: string) => new Intl.DateTimeFormat('vi-VN', {
-  day: '2-digit',
-  month: '2-digit',
-  year: 'numeric',
-  hour: '2-digit',
-  minute: '2-digit'
-}).format(new Date(value));
+const formatDateTime = (value: string) =>
+  new Intl.DateTimeFormat('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(value));
 
 const EventsIndexPage: React.FC = () => {
   const navigate = useNavigate();
@@ -32,16 +33,18 @@ const EventsIndexPage: React.FC = () => {
       <PageHeader title="Sự kiện" />
 
       <div style={{ padding: '12px 16px 16px', background: 'var(--gradient-hero)' }}>
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(3, 1fr)',
-          gap: '8px',
-          background: 'rgba(255,255,255,0.92)',
-          borderRadius: 'var(--radius-pill)',
-          padding: '5px',
-          boxShadow: '0 2px 12px rgba(0,0,0,0.08)'
-        }}>
-          {statusTabs.map(tab => (
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, 1fr)',
+            gap: '8px',
+            background: 'rgba(255,255,255,0.92)',
+            borderRadius: 'var(--radius-pill)',
+            padding: '5px',
+            boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
+          }}
+        >
+          {statusTabs.map((tab) => (
             <button
               key={tab.key}
               onClick={() => setActiveStatus(tab.key)}
@@ -53,7 +56,7 @@ const EventsIndexPage: React.FC = () => {
                 fontSize: '12px',
                 fontWeight: 700,
                 minHeight: '36px',
-                padding: '0 8px'
+                padding: '0 8px',
               }}
             >
               {tab.label}
@@ -86,11 +89,14 @@ const EventsIndexPage: React.FC = () => {
               >
                 <div style={{ position: 'relative', width: '100%', height: '170px' }}>
                   <img src={item.thumbnailUrl} alt={item.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  <div style={{
-                    position: 'absolute',
-                    top: '12px',
-                    left: '12px'
-                  }} className="badge badge-primary">
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: '12px',
+                      left: '12px',
+                    }}
+                    className="badge badge-primary"
+                  >
                     {eventCategoryLabel(item.category)}
                   </div>
                 </div>
@@ -101,15 +107,17 @@ const EventsIndexPage: React.FC = () => {
                   <Text style={{ fontSize: '13px', color: 'var(--primary)', fontWeight: 700, marginBottom: '8px' }}>
                     {formatDateTime(item.startAt)}
                   </Text>
-                  <Text style={{
-                    fontSize: '13px',
-                    color: 'var(--text-secondary)',
-                    lineHeight: '1.45',
-                    display: '-webkit-box',
-                    WebkitLineClamp: 2,
-                    WebkitBoxOrient: 'vertical',
-                    overflow: 'hidden'
-                  }}>
+                  <Text
+                    style={{
+                      fontSize: '13px',
+                      color: 'var(--text-secondary)',
+                      lineHeight: '1.45',
+                      display: '-webkit-box',
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: 'vertical',
+                      overflow: 'hidden',
+                    }}
+                  >
                     {item.location}
                   </Text>
                 </div>

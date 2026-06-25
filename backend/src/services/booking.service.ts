@@ -3,6 +3,7 @@ import { prisma } from '../server';
 import { generateBookingCode, getNextSequence } from '../utils/generateCode';
 import { sendBookingConfirmed, sendBookingReceived, sendBookingRejected } from './zns.service';
 import { sendBookingAdminAlert } from './zaloOA.service';
+import { AppError } from '../utils/appError';
 
 interface CreateBookingInput {
   field: BookingField;
@@ -26,8 +27,13 @@ const parsePreferredDate = (value: string) => {
   const today = new Date();
   const todayUtc = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
 
-  if (date < todayUtc) throw new Error('Không thể đặt lịch trước ngày hiện tại');
-  if (date.getUTCDay() === 6 || date.getUTCDay() === 0) throw new Error('Không thể đặt lịch vào Thứ 7 hoặc Chủ nhật');
+  if (date < todayUtc) {
+    throw new AppError('BOOKING_DATE_IN_PAST', 'Không thể đặt lịch trước ngày hiện tại', 400);
+  }
+  if (date.getUTCDay() === 6 || date.getUTCDay() === 0) {
+    throw new AppError('BOOKING_DATE_WEEKEND', 'Không thể đặt lịch vào Thứ 7 hoặc Chủ nhật', 400);
+  }
+
   return date;
 };
 
@@ -42,20 +48,22 @@ export const createBooking = async (userId: string, data: CreateBookingInput) =>
     preferredTime: data.preferredTime,
     description: data.description,
     contactName: data.contactName,
-    contactPhone: data.contactPhone.trim()
+    contactPhone: data.contactPhone.trim(),
   } as Prisma.BookingUncheckedCreateInput & { contactPhone: string };
 
   const booking = await prisma.booking.create({
     data: bookingData,
-    include: { user: true }
+    include: { user: true },
   });
 
   sendBookingReceived(booking.user.phoneToken || null, booking).catch();
-  sendBookingAdminAlert(booking, booking.user).then(oaMessageId => {
-    if (oaMessageId) {
-      prisma.booking.update({ where: { id: booking.id }, data: { oaMessageId } }).catch();
-    }
-  }).catch();
+  sendBookingAdminAlert(booking, booking.user)
+    .then((oaMessageId) => {
+      if (oaMessageId) {
+        prisma.booking.update({ where: { id: booking.id }, data: { oaMessageId } }).catch();
+      }
+    })
+    .catch();
 
   return booking;
 };
@@ -70,15 +78,17 @@ export const getAdminBookings = async (query: AdminBookingQuery) => {
   const { page, limit, skip } = getPagination(query);
   const where: Prisma.BookingWhereInput = {
     ...(query.status && query.status !== 'ALL' ? { status: query.status as BookingStatus } : {}),
-    ...(query.search ? {
-      OR: [
-        { code: { contains: query.search, mode: 'insensitive' } },
-        { contactName: { contains: query.search, mode: 'insensitive' } },
-        { contactPhone: { contains: query.search, mode: 'insensitive' } } as Prisma.BookingWhereInput,
-        { description: { contains: query.search, mode: 'insensitive' } },
-        { user: { displayName: { contains: query.search, mode: 'insensitive' } } }
-      ]
-    } : {})
+    ...(query.search
+      ? {
+          OR: [
+            { code: { contains: query.search, mode: 'insensitive' } },
+            { contactName: { contains: query.search, mode: 'insensitive' } },
+            { contactPhone: { contains: query.search, mode: 'insensitive' } } as Prisma.BookingWhereInput,
+            { description: { contains: query.search, mode: 'insensitive' } },
+            { user: { displayName: { contains: query.search, mode: 'insensitive' } } },
+          ],
+        }
+      : {}),
   };
 
   const [items, total] = await Promise.all([
@@ -87,9 +97,9 @@ export const getAdminBookings = async (query: AdminBookingQuery) => {
       include: { user: { select: { id: true, displayName: true, avatarUrl: true, zaloId: true } } },
       orderBy: { createdAt: 'desc' },
       skip,
-      take: limit
+      take: limit,
     }),
-    prisma.booking.count({ where })
+    prisma.booking.count({ where }),
   ]);
 
   return { items, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } };
@@ -98,7 +108,7 @@ export const getAdminBookings = async (query: AdminBookingQuery) => {
 export const getAdminBookingSummary = async () => {
   const grouped = await prisma.booking.groupBy({
     by: ['status'],
-    _count: { status: true }
+    _count: { status: true },
   });
 
   const byStatus = grouped.reduce<Record<string, number>>((acc, item) => {
@@ -117,9 +127,9 @@ export const getBookingsByUser = async (userId: string, page: number, limit: num
       where: { userId },
       orderBy: { createdAt: 'desc' },
       skip,
-      take: limit
+      take: limit,
     }),
-    prisma.booking.count({ where: { userId } })
+    prisma.booking.count({ where: { userId } }),
   ]);
 
   return {
@@ -128,16 +138,18 @@ export const getBookingsByUser = async (userId: string, page: number, limit: num
       page,
       limit,
       total,
-      totalPages: Math.ceil(total / limit)
-    }
+      totalPages: Math.ceil(total / limit),
+    },
   };
 };
 
 export const cancelBooking = async (id: string, userId: string) => {
   const booking = await prisma.booking.findFirst({ where: { id, userId } });
-  if (!booking) throw new Error('NOT_FOUND');
+  if (!booking) {
+    throw new AppError('NOT_FOUND', 'Không tìm thấy lịch hẹn', 404);
+  }
   if (!['PENDING', 'CONFIRMED', 'RESCHEDULED'].includes(booking.status)) {
-    throw new Error('Lịch hẹn này không thể hủy');
+    throw new AppError('BOOKING_CANNOT_CANCEL', 'Lịch hẹn này không thể hủy', 400);
   }
 
   return prisma.booking.update({ where: { id }, data: { status: 'CANCELLED' } });
@@ -147,7 +159,9 @@ const parseStatusDate = (value?: string | Date) => {
   if (!value) return undefined;
   if (value instanceof Date) return value;
   const [year, month, day] = value.split('-').map(Number);
-  if (!year || !month || !day) throw new Error('INVALID_DATE');
+  if (!year || !month || !day) {
+    throw new AppError('INVALID_DATE', 'Ngày xác nhận không hợp lệ', 400);
+  }
   return new Date(Date.UTC(year, month - 1, day));
 };
 
@@ -162,13 +176,15 @@ export const updateBookingStatusByAdmin = async (
   }
 ) => {
   const existing = await prisma.booking.findUnique({ where: { id } });
-  if (!existing) throw new Error('NOT_FOUND');
+  if (!existing) {
+    throw new AppError('NOT_FOUND', 'Không tìm thấy lịch hẹn', 404);
+  }
 
   if ((data.status === 'CONFIRMED' || data.status === 'RESCHEDULED') && (!data.confirmedDate || !data.confirmedTime)) {
-    throw new Error('MISSING_CONFIRMATION');
+    throw new AppError('MISSING_CONFIRMATION', 'Vui lòng cung cấp ngày và giờ xác nhận', 400);
   }
   if (data.status === 'REJECTED' && !data.rejectionReason?.trim()) {
-    throw new Error('MISSING_REJECTION_REASON');
+    throw new AppError('MISSING_REJECTION_REASON', 'Vui lòng nhập lý do từ chối lịch hẹn', 400);
   }
 
   const booking = await prisma.booking.update({
@@ -178,9 +194,9 @@ export const updateBookingStatusByAdmin = async (
       confirmedDate: data.status === 'CONFIRMED' || data.status === 'RESCHEDULED' ? parseStatusDate(data.confirmedDate) : undefined,
       confirmedTime: data.status === 'CONFIRMED' || data.status === 'RESCHEDULED' ? data.confirmedTime : undefined,
       rejectionReason: data.status === 'REJECTED' ? data.rejectionReason?.trim() : undefined,
-      rescheduledNote: data.status === 'RESCHEDULED' ? data.rescheduledNote?.trim() || null : undefined
+      rescheduledNote: data.status === 'RESCHEDULED' ? data.rescheduledNote?.trim() || null : undefined,
     },
-    include: { user: true }
+    include: { user: true },
   });
 
   if (data.status === 'CONFIRMED' || data.status === 'RESCHEDULED') {
@@ -199,7 +215,9 @@ export const processWebhookReply = async (
   data: { confirmedDate?: Date; confirmedTime?: string; rejectionReason?: string; rescheduledNote?: string }
 ) => {
   const existing = await prisma.booking.findFirst({ where: { oaMessageId } });
-  if (!existing) throw new Error('NOT_FOUND');
+  if (!existing) {
+    throw new AppError('NOT_FOUND', 'Không tìm thấy lịch hẹn', 404);
+  }
 
   const booking = await prisma.booking.update({
     where: { id: existing.id },
@@ -208,9 +226,9 @@ export const processWebhookReply = async (
       confirmedDate: data.confirmedDate,
       confirmedTime: data.confirmedTime,
       rejectionReason: data.rejectionReason,
-      rescheduledNote: data.rescheduledNote
+      rescheduledNote: data.rescheduledNote,
     },
-    include: { user: true }
+    include: { user: true },
   });
 
   if (status === 'CONFIRMED' || status === 'RESCHEDULED') {
