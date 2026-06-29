@@ -22,6 +22,7 @@ import {
   List,
   ListOrdered,
   LogOut,
+  Menu,
   Image as ImageIcon,
   MessageSquareWarning,
   Plus,
@@ -1129,6 +1130,7 @@ function AdminShell({
   onReloadFeedbackNotifications: () => Promise<void>;
 }) {
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const notificationButtonRef = useRef<HTMLButtonElement | null>(null);
   const notificationPopoverRef = useRef<HTMLDivElement | null>(null);
 
@@ -1143,6 +1145,18 @@ function AdminShell({
     window.addEventListener('mousedown', handlePointerDown);
     return () => window.removeEventListener('mousedown', handlePointerDown);
   }, [isNotificationOpen]);
+
+  useEffect(() => {
+    setIsMobileNavOpen(false);
+  }, [view]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth > 1040) setIsMobileNavOpen(false);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const unreadNotifications = bookingNotifications.filter(item => !readBookingNotificationIds.includes(item.id));
   const readNotifications = bookingNotifications.filter(item => readBookingNotificationIds.includes(item.id));
@@ -1166,10 +1180,21 @@ function AdminShell({
     setIsNotificationOpen(false);
     onNavigate('feedbacks');
   };
+  const handleNavigate = (nextView: ViewMode) => {
+    setIsMobileNavOpen(false);
+    onNavigate(nextView);
+  };
   const viewConfig = VIEW_CONFIG[view];
   return (
-    <main className="admin-layout">
-      <aside className="sidebar">
+    <main className={isMobileNavOpen ? 'admin-layout mobile-nav-open' : 'admin-layout'}>
+      <button
+        type="button"
+        className={isMobileNavOpen ? 'sidebar-backdrop visible' : 'sidebar-backdrop'}
+        aria-label="Đóng menu điều hướng"
+        aria-hidden={!isMobileNavOpen}
+        onClick={() => setIsMobileNavOpen(false)}
+      />
+      <aside className={isMobileNavOpen ? 'sidebar mobile-open' : 'sidebar'}>
         <div className="sidebar-brand">
           <div className="brand-mark">
             <img src={logo} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
@@ -1178,6 +1203,9 @@ function AdminShell({
             <strong>Tùng Thiện</strong>
             <span>Digital Admin</span>
           </div>
+          <button type="button" className="icon-button ghost sidebar-close" onClick={() => setIsMobileNavOpen(false)} aria-label="Đóng menu">
+            <X size={20} />
+          </button>
         </div>
 
         <nav className="sidebar-nav" aria-label="Điều hướng quản trị">
@@ -1232,7 +1260,10 @@ function AdminShell({
 
       <section className="workspace">
         <header className="topbar">
-          <div>
+          <div className="topbar-heading">
+            <button type="button" className="icon-button ghost mobile-nav-toggle" onClick={() => setIsMobileNavOpen(true)} aria-label="Mở menu điều hướng">
+              <Menu size={22} />
+            </button>
             <div className="breadcrumb">
               {view === 'dashboard' ? (
                 <strong>{viewConfig.label}</strong>
