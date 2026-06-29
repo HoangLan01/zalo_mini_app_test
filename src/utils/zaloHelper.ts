@@ -27,10 +27,10 @@ export async function getZaloAccessToken(): Promise<string | null> {
     if (
       accessToken &&
       typeof accessToken === 'object' &&
-      'accessToken' in accessToken &&
-      typeof accessToken.accessToken === 'string'
+      'accessToken' in accessToken
     ) {
-      return accessToken.accessToken;
+      const token = (accessToken as { accessToken?: unknown }).accessToken;
+      return typeof token === 'string' ? token : null;
     }
 
     return null;

@@ -51,7 +51,8 @@ const FeedbackCreatePage: React.FC = () => {
     try {
       await authorize({ scopes: ['scope.userLocation'] });
       const { latitude, longitude } = await getLocation({});
-      setLocationObj({ latitude, longitude });
+      if (latitude == null || longitude == null) throw new Error('Missing coordinates');
+      setLocationObj({ latitude: Number(latitude), longitude: Number(longitude) });
     } catch {
       snackbar.openSnackbar({ type: 'error', text: 'Không thể lấy vị trí. Vui lòng cấp quyền truy cập vị trí.' });
     } finally {

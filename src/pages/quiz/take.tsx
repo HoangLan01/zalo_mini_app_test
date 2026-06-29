@@ -113,11 +113,12 @@ const QuizTakePage: React.FC = () => {
     );
   }
 
-  const currentQuestion = currentSet.questions[currentQuestionIndex];
-  const progressPercent = ((currentQuestionIndex + 1) / currentSet.questions.length) * 100;
+  const questions = currentSet.questions ?? [];
+  const currentQuestion = questions[currentQuestionIndex];
+  const progressPercent = ((currentQuestionIndex + 1) / questions.length) * 100;
 
   const handleNext = () => {
-    if (currentQuestionIndex < currentSet.questions.length - 1) {
+    if (currentQuestionIndex < questions.length - 1) {
       setCurrentQuestionIndex((prev) => prev + 1);
     } else {
       setShowSubmitModal(true);
@@ -131,7 +132,7 @@ const QuizTakePage: React.FC = () => {
       <Box style={{ backgroundColor: '#FFFFFF', padding: '16px', borderBottom: '1px solid #E5E7EB', position: 'sticky', top: 0, zIndex: 10 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
           <Text style={{ fontSize: '14px', fontWeight: 700, color: '#374151' }}>
-            Câu {currentQuestionIndex + 1}/{currentSet.questions.length}
+            Câu {currentQuestionIndex + 1}/{questions.length}
           </Text>
           <Text
             style={{
@@ -208,7 +209,7 @@ const QuizTakePage: React.FC = () => {
           Quay lại
         </Button>
         <Button style={{ flex: 2, backgroundColor: '#246BFD' }} onClick={handleNext}>
-          {currentQuestionIndex === currentSet.questions.length - 1 ? 'Nộp bài' : 'Câu tiếp theo'}
+          {currentQuestionIndex === questions.length - 1 ? 'Nộp bài' : 'Câu tiếp theo'}
         </Button>
       </Box>
 
@@ -220,7 +221,7 @@ const QuizTakePage: React.FC = () => {
           { text: 'Kiểm tra lại', onClick: () => setShowSubmitModal(false), close: true },
           { text: 'Nộp ngay', onClick: () => handleSubmit(false), highLight: true },
         ]}
-        description={`Bạn đã trả lời ${Object.keys(answers).length}/${currentSet.questions.length} câu hỏi. Bạn có chắc chắn muốn nộp bài?`}
+        description={`Bạn đã trả lời ${Object.keys(answers).length}/${questions.length} câu hỏi. Bạn có chắc chắn muốn nộp bài?`}
       />
     </Page>
   );

@@ -1,0 +1,148 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: 20
+
+jobs:
+  deploy_frontend:
+    name: Deploy Frontend
+    if: ${{ secrets.SSH_HOST != '' && secrets.SSH_USER != '' && secrets.SSH_PRIVATE_KEY != '' && secrets.DEPLOY_FRONTEND_DIR != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Configure SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add SSH host key
+        run: ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+
+      - name: Sync frontend files
+        run: rsync -az --delete www/ "$SSH_USER@$SSH_HOST:$DEPLOY_FRONTEND_DIR/"
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          DEPLOY_FRONTEND_DIR: ${{ secrets.DEPLOY_FRONTEND_DIR }}
+
+  deploy_admin:
+    name: Deploy Admin
+    if: ${{ secrets.SSH_HOST != '' && secrets.SSH_USER != '' && secrets.SSH_PRIVATE_KEY != '' && secrets.DEPLOY_ADMIN_DIR != '' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: admin
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: admin/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build admin
+        run: npm run build
+
+      - name: Configure SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add SSH host key
+        run: ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+
+      - name: Sync admin files
+        run: rsync -az --delete dist/ "$SSH_USER@$SSH_HOST:$DEPLOY_ADMIN_DIR/"
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          DEPLOY_ADMIN_DIR: ${{ secrets.DEPLOY_ADMIN_DIR }}
+
+  deploy_backend:
+    name: Deploy Backend
+    if: ${{ secrets.SSH_HOST != '' && secrets.SSH_USER != '' && secrets.SSH_PRIVATE_KEY != '' && secrets.DEPLOY_BACKEND_DIR != '' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Build backend
+        run: npm run build
+
+      - name: Configure SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add SSH host key
+        run: ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+
+      - name: Sync backend release
+        run: >
+          rsync -az --delete
+          dist prisma package.json package-lock.json ecosystem.config.js
+          "$SSH_USER@$SSH_HOST:$DEPLOY_BACKEND_DIR/"
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          DEPLOY_BACKEND_DIR: ${{ secrets.DEPLOY_BACKEND_DIR }}
+
+      - name: Install and restart backend
+        run: >
+          ssh "$SSH_USER@$SSH_HOST"
+          "cd '$DEPLOY_BACKEND_DIR'
+          && npm ci --omit=dev
+          && npx prisma generate
+          && npx prisma migrate deploy
+          && pm2 startOrReload ecosystem.config.js --update-env"
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          DEPLOY_BACKEND_DIR: ${{ secrets.DEPLOY_BACKEND_DIR }}
