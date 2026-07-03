@@ -953,6 +953,9 @@ function Dashboard({ user, onLogout }: { user: AdminUser; onLogout: () => void }
   };
 
   const startCreateQuestion = () => navigateView('create', 'push');
+  const openCloneSetModal = () => openModal('SET_CLONE');
+  const openCloseSetModal = () => openModal('SET_CLOSE');
+  const openPublishSetModal = () => openModal('SET_PUBLISH');
 
   return (
     <AdminShell
@@ -961,9 +964,9 @@ function Dashboard({ user, onLogout }: { user: AdminUser; onLogout: () => void }
       onNavigate={navigateView}
       onLogout={onLogout}
       onCreateQuestion={startCreateQuestion}
-      onCloneClick={() => openModal('SET_CLONE')}
-      onCloseClick={() => openModal('SET_CLOSE')}
-      onPublishClick={() => openModal('SET_PUBLISH')}
+      onCloneClick={openCloneSetModal}
+      onCloseClick={openCloseSetModal}
+      onPublishClick={openPublishSetModal}
       pendingNotificationCount={unreadBookingCount + unreadFeedbackCount}
       bookingNotifications={bookingNotifications}
       readBookingNotificationIds={readBookingNotificationIds}
@@ -1066,6 +1069,9 @@ function Dashboard({ user, onLogout }: { user: AdminUser; onLogout: () => void }
           onStatusChange={setSetStatusFilter}
           onSearchChange={setQuestionSearch}
           onRefresh={() => refreshAll().catch(err => showMessage(err instanceof Error ? err.message : 'Không thể làm mới dữ liệu', 'error'))}
+          onCloneSet={openCloneSetModal}
+          onCloseSet={openCloseSetModal}
+          onPublishSet={openPublishSetModal}
           onCreateQuestion={startCreateQuestion}
           onAddTopicClick={() => openModal('TOPIC_CREATE')}
           onAddSetClick={() => openModal('SET_CREATE')}
@@ -1185,6 +1191,8 @@ function AdminShell({
     onNavigate(nextView);
   };
   const viewConfig = VIEW_CONFIG[view];
+  const topbarClassName = 'topbar';
+  const topbarActionsClassName = 'topbar-actions';
   return (
     <main className={isMobileNavOpen ? 'admin-layout mobile-nav-open' : 'admin-layout'}>
       <button
@@ -1259,34 +1267,36 @@ function AdminShell({
       </aside>
 
       <section className="workspace">
-        <header className="topbar">
+        <header className={topbarClassName}>
           <div className="topbar-heading">
             <button type="button" className="icon-button ghost mobile-nav-toggle" onClick={() => setIsMobileNavOpen(true)} aria-label="Mở menu điều hướng">
               <Menu size={22} />
             </button>
-            <div className="breadcrumb">
-              {view === 'dashboard' ? (
-                <strong>{viewConfig.label}</strong>
-              ) : view === 'bank' || view === 'create' ? (
-                <>
-                  <button onClick={() => onNavigate('dashboard')}>Tổng quan</button>
-                  <span>/</span>
-                  <button onClick={() => onNavigate('bank')}>Quản lý câu hỏi</button>
-                  {view === 'create' && <><span>/</span><strong>Thêm câu hỏi mới</strong></>}
-                </>
-              ) : (
-                <>
-                  <button onClick={() => onNavigate('dashboard')}>Tổng quan</button>
-                  <span>/</span>
-                  <span>{viewConfig.section}</span>
-                  <span>/</span>
+            <div className="topbar-title-group">
+              <div className="breadcrumb">
+                {view === 'dashboard' ? (
                   <strong>{viewConfig.label}</strong>
-                </>
-              )}
+                ) : view === 'bank' || view === 'create' ? (
+                  <>
+                    <button onClick={() => onNavigate('dashboard')}>Tổng quan</button>
+                    <span>/</span>
+                    <button onClick={() => onNavigate('bank')}>Quản lý câu hỏi</button>
+                    {view === 'create' && <><span>/</span><strong>Thêm câu hỏi mới</strong></>}
+                  </>
+                ) : (
+                  <>
+                    <button onClick={() => onNavigate('dashboard')}>Tổng quan</button>
+                    <span>/</span>
+                    <span>{viewConfig.section}</span>
+                    <span>/</span>
+                    <strong>{viewConfig.label}</strong>
+                  </>
+                )}
+              </div>
+              <h1>{viewConfig.title}</h1>
             </div>
-            <h1>{viewConfig.title}</h1>
           </div>
-          <div className="topbar-actions">
+          <div className={topbarActionsClassName}>
             <button
               ref={notificationButtonRef}
               className={pendingNotificationCount > 0 ? 'icon-button notify has-alert' : 'icon-button notify'}
@@ -1348,16 +1358,6 @@ function AdminShell({
                 )}
               </div>
             )}
-            {view === 'dashboard' ? (
-              null
-            ) : view === 'bank' ? (
-              <>
-                <button className="secondary-button" onClick={onCloneClick}>Tạo bản mới</button>
-                <button className="secondary-button danger" onClick={onCloseClick}>Đóng bộ</button>
-                <button className="primary-button strong" onClick={onPublishClick}>Xuất bản</button>
-                <button className="primary-button" onClick={onCreateQuestion}><Plus size={20} /> Thêm câu hỏi</button>
-              </>
-            ) : null}
           </div>
         </header>
         <div className="content-shell">{children}</div>
@@ -1384,6 +1384,9 @@ function QuestionBankView({
   onStatusChange,
   onSearchChange,
   onRefresh,
+  onCloneSet,
+  onCloseSet,
+  onPublishSet,
   onCreateQuestion,
   onAddTopicClick,
   onAddSetClick,
@@ -1411,6 +1414,9 @@ function QuestionBankView({
   onStatusChange: (value: string) => void;
   onSearchChange: (value: string) => void;
   onRefresh: () => void;
+  onCloneSet: () => void;
+  onCloseSet: () => void;
+  onPublishSet: () => void;
   onCreateQuestion: () => void;
   onAddTopicClick: () => void;
   onAddSetClick: () => void;
@@ -1424,6 +1430,13 @@ function QuestionBankView({
   return (
     <div className="bank-layout">
       <section className="main-column">
+        <div className="glass-card bank-action-bar">
+          <button className="secondary-button" onClick={onCloneSet}>Tạo bản mới</button>
+          <button className="secondary-button danger" onClick={onCloseSet}>Đóng bộ</button>
+          <button className="primary-button strong" onClick={onPublishSet}>Xuất bản</button>
+          <button className="primary-button" onClick={onCreateQuestion}><Plus size={20} /> Thêm câu hỏi</button>
+        </div>
+
         <div className="stats-grid">
           {dashboardStats.map(stat => <StatCard key={stat.label} {...stat} />)}
         </div>
@@ -1459,7 +1472,7 @@ function QuestionBankView({
               <p className="eyebrow">Quản lý câu hỏi</p>
               <h2>{selectedSet?.title || 'Chưa chọn bộ câu hỏi'}</h2>
             </div>
-            <button className="primary-button compact" onClick={onCreateQuestion}><Plus size={18} /> Thêm câu hỏi</button>
+            <button className="primary-button compact bank-inline-create" onClick={onCreateQuestion}><Plus size={18} /> Thêm câu hỏi</button>
           </div>
           {selectedSet ? (
             questions.length > 0 ? (
