@@ -61,6 +61,7 @@ jest.mock('../services/zaloOA.service', () => ({
 // Factory helpers
 // ──────────────────────────────────────────────
 export const TEST_JWT_SECRET = process.env.JWT_SECRET || 'test-jwt-secret-key-do-not-use-in-production';
+process.env.JWT_SECRET = TEST_JWT_SECRET;
 
 export function createMockUser(overrides: Partial<any> = {}) {
   return {
