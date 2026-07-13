@@ -1,4 +1,6 @@
 import { create } from 'zustand';
+import thanhViThumbnail from '../../thanh_vi1.jpg';
+import vanKheThumbnail from '../../van_khe1.jpg';
 
 export type HeritageItem = {
   id: string;
@@ -38,7 +40,7 @@ const initialHeritages: HeritageItem[] = [
     id: '1', 
     name: 'Đình Thanh Vị', 
     address: 'Tổ dân phố Thanh Vị, Phường Tùng Thiện, TP Hà Nội', 
-    coverImage: 'https://images.unsplash.com/photo-1590076215667-874d4efda702?w=800',
+    coverImage: thanhViThumbnail,
     shortDesc: 'Đình Thanh Vị tọa lạc tại tổ dân phố Thanh Vị, thờ phụng Tản Viên Sơn Thánh, được khởi dựng vào năm 1743...',
     description: mockHtmlContent,
     gallery: [
@@ -51,7 +53,7 @@ const initialHeritages: HeritageItem[] = [
     id: '2', 
     name: 'Đền Mẫu Phường Tùng Thiện', 
     address: 'Khu dân cư số 2, Phường Tùng Thiện', 
-    coverImage: 'https://images.unsplash.com/photo-1565552395627-142277d3f233?w=800',
+    coverImage: vanKheThumbnail,
     shortDesc: 'Đền thờ Mẫu mang đậm kiến trúc nghệ thuật thời Nguyễn, lưu giữ nhiều sắc phong cổ.',
     description: '<p>Nội dung chi tiết đang được Admin cập nhật...</p>',
     gallery: []
