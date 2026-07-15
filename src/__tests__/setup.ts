@@ -37,13 +37,6 @@ vi.mock('zmp-ui', () => ({
   useNavigate: () => vi.fn(),
 }));
 
-// Mock import.meta.env
-Object.defineProperty(globalThis, 'import', { value: { meta: { env: {
-  VITE_API_URL: 'http://localhost:3001',
-  VITE_ENABLE_DEV_AUTH: 'true',
-  DEV: true
-} } } });
-
 // Mock localStorage
 const localStorageMock = (() => {
   let store: Record<string, string> = {};

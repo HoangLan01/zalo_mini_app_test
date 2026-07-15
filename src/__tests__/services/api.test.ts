@@ -3,6 +3,9 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+vi.stubEnv('VITE_API_URL', 'http://localhost:3001');
+vi.stubEnv('VITE_ENABLE_DEV_AUTH', 'true');
+
 // Mock zaloHelper before importing api
 vi.mock('@/utils/zaloHelper', () => ({
   getZaloAccessToken: vi.fn().mockResolvedValue(null),
@@ -16,6 +19,7 @@ vi.stubGlobal('fetch', mockFetch);
 describe('api service', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockFetch.mockReset();
     localStorage.clear();
   });
 
