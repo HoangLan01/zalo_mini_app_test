@@ -2,6 +2,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 import { PrismaClient } from '@prisma/client';
+import logger from './utils/logger';
 
 const prisma = new PrismaClient();
 
@@ -95,10 +96,10 @@ async function main() {
 main()
   .then(async () => {
     await prisma.$disconnect();
-    console.log('Quiz seed completed.');
+    logger.info('Quiz seed completed.');
   })
   .catch(async error => {
-    console.error(error);
+    logger.error(`Quiz seed failed: ${error instanceof Error ? error.stack || error.message : String(error)}`);
     await prisma.$disconnect();
     process.exit(1);
   });

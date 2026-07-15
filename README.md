@@ -20,7 +20,8 @@ npm install
 npm run dev
 ```
 
-Frontend mac dinh goi API theo `VITE_API_URL`. Neu khong cau hinh, ung dung dung `http://localhost:3001`.
+Frontend local co the goi `http://localhost:3001` neu khong truyen `VITE_API_URL`.
+Production build bat buoc phai truyen ro `VITE_API_URL` va `VITE_ZALO_OA_ID`, neu thieu build se fail som.
 
 ## Chay backend
 
@@ -32,9 +33,28 @@ npm run dev
 
 ## Luu y phat trien
 
-- Luong dang nhap uu tien `getAccessToken()` tu Zalo Mini App, co fallback `dev-login` khi chay local neu bat dev auth.
+- Luong dang nhap uu tien `getAccessToken()` tu Zalo Mini App, co fallback `dev-login` chi khi chay local va chu dong bat dev auth.
 - Cac trang web ngoai nhu DVC, VNeID, iHanoi, TTDT duoc mo bang `openWebview` va co fallback cho moi truong web dev.
-- Du an dang trong giai doan phat trien nen mot so yeu cau chi danh cho production chua duoc ap dung o day.
+
+## Env va topology production
+
+- Topology da chot:
+  - `frontend`: public app origin tren domain `phuongtungthien.com`
+  - `admin`: `https://admin.phuongtungthien.com`
+  - `backend`: `https://api.phuongtungthien.com`
+- Frontend va admin production deu phai build voi `VITE_API_URL=https://api.phuongtungthien.com`.
+- Backend production can khai bao toi thieu:
+  - `APP_URL=https://phuongtungthien.com`
+  - `ADMIN_APP_URL=https://admin.phuongtungthien.com`
+  - `COOKIE_DOMAIN=api.phuongtungthien.com`
+  - `ADMIN_COOKIE_SAME_SITE=strict` hoac gia tri da duoc kiem thu theo flow thuc te
+- `ENABLE_DEV_AUTH` va `VITE_ENABLE_DEV_AUTH` phai de `false` trong moi truong public.
+
+## Bao mat secret
+
+- Khong dua secret that vao `.env.example`, `backend/.env.example`, `admin/.env.example`.
+- Neu secret da tung xuat hien trong repo hoac file mau, can rotate tren he thong that truoc khi deploy production.
+- Nhom can uu tien rotate: `JWT_SECRET`, thong tin bootstrap admin, secret/token Zalo, secret Cloudinary va bat ky key nao tung duoc commit.
 
 ## GitHub Actions CI/CD
 

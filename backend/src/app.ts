@@ -33,8 +33,16 @@ const allowedOrigins = [process.env.APP_URL, process.env.ADMIN_APP_URL]
   .flatMap(value => (value || '').split(','))
   .map(value => value.trim())
   .filter(Boolean);
+const trustProxy = (() => {
+  const value = process.env.TRUST_PROXY?.trim();
+  if (!value) return 1;
+  if (value === 'true') return 1;
+  if (value === 'false') return false;
+  const asNumber = Number(value);
+  return Number.isInteger(asNumber) ? asNumber : value;
+})();
 
-app.set('trust proxy', 1);
+app.set('trust proxy', trustProxy);
 app.disable('x-powered-by');
 
 app.use('/webhook/zalo', express.raw({ type: 'application/json' }), webhookRoutes);
@@ -89,8 +97,14 @@ app.use((req, res, next) => {
 
 app.use('/api', globalIpRateLimiter, globalRateLimiter);
 
-app.get('/health', (req, res) => {
-  return sendSuccess(res, { status: 'ok', timestamp: new Date().toISOString() });
+app.get('/health', async (req, res) => {
+  try {
+    const { prisma } = await import('./server');
+    await prisma.$queryRaw`SELECT 1`;
+    return sendSuccess(res, { status: 'ok', timestamp: new Date().toISOString() });
+  } catch {
+    return sendError(res, 'SERVICE_UNAVAILABLE', 'Database connection failed', 503);
+  }
 });
 
 app.use('/api/auth', authRateLimiter, authRoutes);

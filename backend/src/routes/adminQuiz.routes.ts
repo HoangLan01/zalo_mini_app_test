@@ -51,8 +51,10 @@ router.use(authenticateAdmin, requireAdmin, verifyAdminOrigin, auditAdminMutatio
 router.get('/dashboard', quizController.getDashboardStats);
 
 router.get('/topics', quizController.getAdminTopics);
+router.get('/topics/archived', quizController.getArchivedAdminTopics);
 router.post('/topics', validate(topicCreateSchema), quizController.createTopic);
 router.patch('/topics/:id', validate(topicUpdateSchema), quizController.updateTopic);
+router.delete('/topics/:id/permanent', quizController.permanentlyDeleteArchivedTopic);
 router.delete('/topics/:id', quizController.archiveTopic);
 
 router.get('/sets', quizController.getAdminSets);

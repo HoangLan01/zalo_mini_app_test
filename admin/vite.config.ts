@@ -1,10 +1,18 @@
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 
-export default defineConfig({
-  base: process.env.VITE_BASE_PATH || '/',
-  plugins: [react()],
-  server: {
-    port: 3100
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '');
+
+  if (mode !== 'development' && !env.VITE_API_URL?.trim()) {
+    throw new Error('Admin production build requires VITE_API_URL.');
   }
+
+  return {
+    base: env.VITE_BASE_PATH || '/',
+    plugins: [react()],
+    server: {
+      port: 3100
+    }
+  };
 });

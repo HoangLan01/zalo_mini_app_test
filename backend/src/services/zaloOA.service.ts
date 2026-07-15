@@ -6,8 +6,6 @@ import { Feedback, Booking, User, Rating, FeedbackCategory, BookingField } from 
 import { prisma } from '../server';
 import qs from 'qs';
 
-let cachedAccessToken: string | null = null;
-
 type BookingAdminAlert = Booking & {
   contactName: string;
   contactPhone?: string | null;

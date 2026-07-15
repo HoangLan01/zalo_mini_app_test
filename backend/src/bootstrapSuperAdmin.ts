@@ -4,6 +4,7 @@ dotenv.config();
 import bcrypt from 'bcryptjs';
 import { PrismaClient } from '@prisma/client';
 import { isStrongPassword, PASSWORD_POLICY_MESSAGE } from './utils/password';
+import logger from './utils/logger';
 
 const prisma = new PrismaClient();
 
@@ -20,7 +21,7 @@ async function main() {
       where: { id: existing.id },
       data: { role: 'SUPER_ADMIN', status: 'ACTIVE', sessionVersion: { increment: 1 } }
     });
-    console.log(`Promoted ${email} to SUPER_ADMIN without changing its password.`);
+    logger.info(`Promoted ${email} to SUPER_ADMIN without changing its password.`);
     return;
   }
 
@@ -37,13 +38,13 @@ async function main() {
       mustChangePassword: true
     }
   });
-  console.log(`Created SUPER_ADMIN ${email}. Password change is required on first login.`);
+  logger.info(`Created SUPER_ADMIN ${email}. Password change is required on first login.`);
 }
 
 main()
   .then(() => prisma.$disconnect())
   .catch(async error => {
-    console.error(error);
+    logger.error(`Failed to bootstrap SUPER_ADMIN: ${error instanceof Error ? error.stack || error.message : String(error)}`);
     await prisma.$disconnect();
     process.exit(1);
   });

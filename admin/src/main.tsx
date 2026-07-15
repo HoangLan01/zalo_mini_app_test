@@ -50,16 +50,19 @@ import Link from '@tiptap/extension-link';
 import Image from '@tiptap/extension-image';
 import './styles.css';
 
-const API_URL = import.meta.env.VITE_API_URL || (
-  import.meta.env.DEV
-    ? `${window.location.protocol}//${window.location.hostname}:3001`
-    : window.location.origin
-);
+const resolveApiUrl = () => {
+  const configured = import.meta.env.VITE_API_URL?.trim();
+  if (configured) return configured.replace(/\/+$/, '');
+  if (import.meta.env.DEV) return `${window.location.protocol}//${window.location.hostname}:3001`;
+  throw new Error('VITE_API_URL is required for non-development builds.');
+};
+
+const API_URL = resolveApiUrl();
 const BOOKING_NOTIFICATION_READ_KEY = 'booking_notification_read_ids';
 const FEEDBACK_NOTIFICATION_READ_KEY = 'feedback_notification_read_ids';
 
 type ApiResponse<T> = { success: true; data: T } | { success: false; error: { code: string; message: string } };
-type Topic = { id: string; title: string; slug: string; description?: string; order: number; isActive: boolean; _count?: { sets: number } };
+type Topic = { id: string; title: string; slug: string; description?: string; order: number; isActive: boolean; archivedAt?: string | null; _count?: { sets: number } };
 type QuizSetStatus = 'DRAFT' | 'PUBLISHED' | 'CLOSED' | 'ARCHIVED' | string;
 type EventStatus = 'DRAFT' | 'PUBLISHED' | 'CLOSED' | 'ARCHIVED' | string;
 type EventCategory = 'VAN_HOA' | 'THE_THAO' | 'HANH_CHINH' | 'LE_HOI' | 'KHAC';
@@ -625,6 +628,7 @@ function App() {
 function Dashboard({ user, onLogout }: { user: AdminUser; onLogout: () => void }) {
   const [view, setView] = useState<ViewMode>(() => getViewFromLocation());
   const [topics, setTopics] = useState<Topic[]>([]);
+  const [archivedTopics, setArchivedTopics] = useState<Topic[]>([]);
   const [sets, setSets] = useState<QuizSet[]>([]);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [selectedTopicId, setSelectedTopicId] = useState('');
@@ -770,6 +774,10 @@ function Dashboard({ user, onLogout }: { user: AdminUser; onLogout: () => void }
     setTopics(await api<Topic[]>('/api/admin/quiz/topics'));
   };
 
+  const loadArchivedTopics = async () => {
+    setArchivedTopics(await api<Topic[]>('/api/admin/quiz/topics/archived'));
+  };
+
   const loadSets = async (topicId = selectedTopicId) => {
     const query = topicId ? `?topicId=${topicId}` : '';
     const data = await api<QuizSet[]>(`/api/admin/quiz/sets${query}`);
@@ -815,7 +823,7 @@ function Dashboard({ user, onLogout }: { user: AdminUser; onLogout: () => void }
   const refreshAll = async () => {
     setLoading(true);
     try {
-      await loadTopics();
+      await Promise.all([loadTopics(), loadArchivedTopics()]);
       await loadSets();
       if (selectedSetId) {
         await loadQuestions();
@@ -828,7 +836,7 @@ function Dashboard({ user, onLogout }: { user: AdminUser; onLogout: () => void }
 
   useEffect(() => {
     if (!isQuizView) return;
-    loadTopics().catch(err => showMessage(err instanceof Error ? err.message : 'Không thể tải dữ liệu', 'error'));
+    Promise.all([loadTopics(), loadArchivedTopics()]).catch(err => showMessage(err instanceof Error ? err.message : 'Không thể tải dữ liệu', 'error'));
   }, [isQuizView]);
 
   useEffect(() => {
@@ -936,7 +944,10 @@ function Dashboard({ user, onLogout }: { user: AdminUser; onLogout: () => void }
   };
 
   const saveBatchQuestions = async (draftQuestions: QuestionDraft[], deletedIds: string[]) => {
-    if (!selectedSetId) return;
+    if (!selectedSetId || !selectedSet) {
+      showMessage('Vui lòng tạo hoặc chọn bộ câu hỏi trước khi lưu.', 'error');
+      return;
+    }
     const hasEmptyOption = draftQuestions.some(q => q.options.some(opt => !opt.content.trim()));
     const hasEmptyContent = draftQuestions.some(q => !q.content.trim());
     if (hasEmptyContent || hasEmptyOption) {
@@ -952,7 +963,13 @@ function Dashboard({ user, onLogout }: { user: AdminUser; onLogout: () => void }
     }, 'Đã lưu tất cả câu hỏi');
   };
 
-  const startCreateQuestion = () => navigateView('create', 'push');
+  const startCreateQuestion = () => {
+    if (!selectedSetId || !selectedSet) {
+      showMessage('Vui lòng tạo hoặc chọn bộ câu hỏi trước khi thêm câu hỏi.', 'error');
+      return;
+    }
+    navigateView('create', 'push');
+  };
   const openCloneSetModal = () => openModal('SET_CLONE');
   const openCloseSetModal = () => openModal('SET_CLOSE');
   const openPublishSetModal = () => openModal('SET_PUBLISH');
@@ -1053,6 +1070,7 @@ function Dashboard({ user, onLogout }: { user: AdminUser; onLogout: () => void }
       ) : view === 'bank' ? (
         <QuestionBankView
           topics={topics}
+          archivedTopics={archivedTopics}
           sets={sets}
           filteredSets={filteredSets}
           questions={filteredQuestions}
@@ -1079,6 +1097,12 @@ function Dashboard({ user, onLogout }: { user: AdminUser; onLogout: () => void }
           onEditSet={set => openModal('SET_EDIT', set)}
           onEditQuestion={startCreateQuestion}
           onArchiveTopic={topic => action(() => api(`/api/admin/quiz/topics/${topic.id}`, { method: 'DELETE' }), 'Đã lưu trữ chủ đề')}
+          onPermanentlyDeleteArchivedTopic={topic => {
+            const confirmed = window.confirm(`Xóa vĩnh viễn chủ đề “${topic.title}”? Toàn bộ bộ câu hỏi, câu hỏi, đáp án và lịch sử làm bài liên quan sẽ bị xóa và không thể khôi phục.`);
+            if (confirmed) {
+              void action(() => api(`/api/admin/quiz/topics/${topic.id}/permanent`, { method: 'DELETE' }), 'Đã xóa vĩnh viễn chủ đề và dữ liệu quiz liên quan');
+            }
+          }}
           onArchiveSet={set => action(() => api(`/api/admin/quiz/sets/${set.id}`, { method: 'DELETE' }), 'Đã lưu trữ bộ câu hỏi')}
           onArchiveQuestion={question => action(() => api(`/api/admin/quiz/questions/${question.id}`, { method: 'DELETE' }), 'Đã lưu trữ câu hỏi')}
         />
@@ -1368,6 +1392,7 @@ function AdminShell({
 
 function QuestionBankView({
   topics,
+  archivedTopics,
   sets,
   filteredSets,
   questions,
@@ -1394,10 +1419,12 @@ function QuestionBankView({
   onEditSet,
   onEditQuestion,
   onArchiveTopic,
+  onPermanentlyDeleteArchivedTopic,
   onArchiveSet,
   onArchiveQuestion
 }: {
   topics: Topic[];
+  archivedTopics: Topic[];
   sets: QuizSet[];
   filteredSets: QuizSet[];
   questions: Question[];
@@ -1424,6 +1451,7 @@ function QuestionBankView({
   onEditSet: (set: QuizSet) => void;
   onEditQuestion: (question: Question) => void;
   onArchiveTopic: (topic: Topic) => void;
+  onPermanentlyDeleteArchivedTopic: (topic: Topic) => void;
   onArchiveSet: (set: QuizSet) => void;
   onArchiveQuestion: (question: Question) => void;
 }) {
@@ -1532,6 +1560,27 @@ function QuestionBankView({
               </div>
             ))}
           </div>
+          {archivedTopics.length > 0 && (
+            <div className="mini-list" style={{ marginTop: '20px' }}>
+              <p className="eyebrow" style={{ margin: '0 0 8px' }}>Chủ đề đã lưu trữ</p>
+              {archivedTopics.map(topic => (
+                <div className="mini-row" key={topic.id}>
+                  <div>
+                    <strong>{topic.title}</strong>
+                    <span>{topic._count?.sets || 0} bộ câu hỏi · đã lưu trữ</span>
+                  </div>
+                  <button
+                    className="icon-button danger"
+                    onClick={() => onPermanentlyDeleteArchivedTopic(topic)}
+                    aria-label={`Xóa vĩnh viễn chủ đề ${topic.title}`}
+                    title="Xóa vĩnh viễn"
+                  >
+                    <Trash2 size={17} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
 
         <section className="glass-card management-card">
@@ -1655,8 +1704,11 @@ function SetEditorView({
   return (
     <div className="editor-list-layout">
       <div className="set-header-card">
-        <input value={selectedSet?.title || ''} readOnly placeholder="Tiêu đề bộ câu hỏi" />
-        <textarea value={selectedSet?.description || ''} readOnly placeholder="Mô tả bộ câu hỏi" />
+        <p className="set-header-label">Bộ câu hỏi đang chỉnh sửa</p>
+        <h1>{selectedSet?.title || 'Chưa chọn bộ câu hỏi'}</h1>
+        <p className="set-header-description">
+          {selectedSet?.description || 'Hãy quay lại ngân hàng câu hỏi để chọn một bộ câu hỏi trước khi thêm nội dung.'}
+        </p>
       </div>
 
       {questions.map((q, qIndex) => (

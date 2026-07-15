@@ -19,7 +19,7 @@
   },
   "dependencies": {
     "@prisma/client": "^5.x",
-    "axios": "^1.17.0",
+    "axios": "^1.18.1",
     "bcryptjs": "^2.x",
     "cloudinary": "^2.x",
     "cors": "^2.x",
@@ -28,11 +28,14 @@
     "express-rate-limit": "^7.x",
     "helmet": "^7.x",
     "jsonwebtoken": "^9.x",
-    "multer": "^2.1.1",
+    "multer": "^2.2.0",
     "node-cron": "^4.2.1",
     "sanitize-html": "^2.17.4",
     "winston": "^3.x",
     "zod": "^3.x"
+  },
+  "overrides": {
+    "form-data": "^4.0.6"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.x",

@@ -12,11 +12,65 @@ concurrency:
 
 env:
   NODE_VERSION: 20
+  FRONTEND_NPM_VERSION: 11.7.0
 
 jobs:
+  validate_deploy_config:
+    name: Validate Deploy Config
+    runs-on: ubuntu-latest
+    outputs:
+      frontend_ready: ${{ steps.validate.outputs.frontend_ready }}
+      admin_ready: ${{ steps.validate.outputs.admin_ready }}
+      backend_ready: ${{ steps.validate.outputs.backend_ready }}
+    steps:
+      - id: validate
+        shell: bash
+        run: |
+          frontend_ready=true
+          admin_ready=true
+          backend_ready=true
+
+          if [[ -z "${{ secrets.SSH_HOST }}" || -z "${{ secrets.SSH_USER }}" || -z "${{ secrets.SSH_PRIVATE_KEY }}" ]]; then
+            frontend_ready=false
+            admin_ready=false
+            backend_ready=false
+            echo "Missing shared SSH deploy secrets." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          if [[ -z "${{ secrets.DEPLOY_FRONTEND_DIR }}" ]]; then
+            frontend_ready=false
+            echo "Frontend deploy skipped: missing DEPLOY_FRONTEND_DIR." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          if [[ -z "${{ secrets.DEPLOY_ADMIN_DIR }}" ]]; then
+            admin_ready=false
+            echo "Admin deploy skipped: missing DEPLOY_ADMIN_DIR." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          if [[ -z "${{ secrets.DEPLOY_BACKEND_DIR }}" ]]; then
+            backend_ready=false
+            echo "Backend deploy skipped: missing DEPLOY_BACKEND_DIR." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          if [[ -z "${{ vars.PROD_API_URL }}" ]]; then
+            frontend_ready=false
+            admin_ready=false
+            echo "Static builds skipped: missing repository variable PROD_API_URL." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          if [[ -z "${{ vars.PROD_ZALO_OA_ID }}" ]]; then
+            frontend_ready=false
+            echo "Frontend deploy skipped: missing repository variable PROD_ZALO_OA_ID." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          echo "frontend_ready=$frontend_ready" >> "$GITHUB_OUTPUT"
+          echo "admin_ready=$admin_ready" >> "$GITHUB_OUTPUT"
+          echo "backend_ready=$backend_ready" >> "$GITHUB_OUTPUT"
+
   deploy_frontend:
     name: Deploy Frontend
-    if: ${{ secrets.SSH_HOST != '' && secrets.SSH_USER != '' && secrets.SSH_PRIVATE_KEY != '' && secrets.DEPLOY_FRONTEND_DIR != '' }}
+    needs: validate_deploy_config
+    if: ${{ needs.validate_deploy_config.outputs.frontend_ready == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,11 +81,17 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
 
+      - name: Use frontend npm version
+        run: npm install --global npm@${{ env.FRONTEND_NPM_VERSION }}
+
       - name: Install dependencies
         run: npm ci
 
       - name: Build frontend
         run: npm run build
+        env:
+          VITE_API_URL: ${{ vars.PROD_API_URL }}
+          VITE_ZALO_OA_ID: ${{ vars.PROD_ZALO_OA_ID }}
 
       - name: Configure SSH
         uses: webfactory/ssh-agent@v0.9.0
@@ -52,7 +112,8 @@ jobs:
 
   deploy_admin:
     name: Deploy Admin
-    if: ${{ secrets.SSH_HOST != '' && secrets.SSH_USER != '' && secrets.SSH_PRIVATE_KEY != '' && secrets.DEPLOY_ADMIN_DIR != '' }}
+    needs: validate_deploy_config
+    if: ${{ needs.validate_deploy_config.outputs.admin_ready == 'true' }}
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -71,6 +132,8 @@ jobs:
 
       - name: Build admin
         run: npm run build
+        env:
+          VITE_API_URL: ${{ vars.PROD_API_URL }}
 
       - name: Configure SSH
         uses: webfactory/ssh-agent@v0.9.0
@@ -91,7 +154,8 @@ jobs:
 
   deploy_backend:
     name: Deploy Backend
-    if: ${{ secrets.SSH_HOST != '' && secrets.SSH_USER != '' && secrets.SSH_PRIVATE_KEY != '' && secrets.DEPLOY_BACKEND_DIR != '' }}
+    needs: validate_deploy_config
+    if: ${{ needs.validate_deploy_config.outputs.backend_ready == 'true' }}
     runs-on: ubuntu-latest
     defaults:
       run:
