@@ -15,6 +15,7 @@ concurrency:
 
 env:
   NODE_VERSION: 20
+  FRONTEND_NPM_VERSION: 11.7.0
 
 permissions:
   contents: read
@@ -31,6 +32,9 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
           cache-dependency-path: package-lock.json
+
+      - name: Use frontend npm version
+        run: npm install --global npm@${{ env.FRONTEND_NPM_VERSION }}
 
       - name: Install dependencies
         run: npm ci
