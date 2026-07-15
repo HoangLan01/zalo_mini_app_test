@@ -4,7 +4,7 @@ export const verifyAdminOrigin = (req: Request, res: Response, next: NextFunctio
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
 
   const origin = req.get('origin');
-  const allowed = (process.env.ADMIN_APP_URL || process.env.APP_URL || '')
+  const allowed = (process.env.ADMIN_APP_URL || '')
     .split(',')
     .map(value => value.trim())
     .filter(Boolean);

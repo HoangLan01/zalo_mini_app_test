@@ -42,16 +42,16 @@ const config: Config = {
   coverageDirectory: 'coverage',
   coverageThreshold: {
     global: {
-      branches: 20,
-      functions: 20,
-      lines: 20,
-      statements: 20,
+      branches: 22,
+      functions: 28,
+      lines: 49,
+      statements: 50,
     },
     './src/services/': {
-      branches: 15,
-      functions: 15,
-      lines: 30,
-      statements: 30,
+      branches: 20,
+      functions: 18,
+      lines: 34,
+      statements: 36,
     },
   },
 

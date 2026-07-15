@@ -10,9 +10,9 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true
+    "declaration": true
+    // If production debugging is needed, build separately with tsc --sourceMap.
+    // Do not deploy .map files.
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]

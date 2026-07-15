@@ -35,6 +35,7 @@ export interface QuizAttemptSummary {
   score: number;
   maxScore: number;
   timeTaken: number;
+  startedAt: string;
   submittedAt?: string;
 }
 

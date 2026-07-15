@@ -14,17 +14,11 @@ export const handleZaloWebhook = (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Invalid JSON' });
   }
 
-  // Verify signature
   const mac = body.mac || (req.headers['x-zevent-signature'] as string);
-  
-  // Note: For Zalo OA webhook, normally the hash is over appId + raw data + secret key.
-  // The documentation in prompt says: "mac": "<hmac_sha256_signature>"
+
   if (!mac || !verifyZaloWebhookSignature(rawBody, mac)) {
-     // NOTE: Sometimes rawBody needs to be parsed differently depending on how express.raw was configured.
-     // In a real env, if signature fails, we log it and return 401. But to prevent blocking while testing:
      logger.warn('Invalid Zalo Webhook signature');
-     // Uncomment below in strict production:
-     // return res.status(401).json({ error: 'Invalid signature' });
+     return res.status(401).json({ error: 'Invalid signature' });
   }
 
   // Always return 200 immediately to acknowledge receipt

@@ -1980,34 +1980,27 @@ p {
   gap: 16px;
 }
 
-.set-header-card input {
+.set-header-card h1 {
+  color: var(--text);
   font-size: 24px;
   font-weight: 700;
-  border: none;
-  background: transparent;
-  padding: 8px 0;
-  border-bottom: 2px solid transparent;
-  border-radius: 0;
-  min-height: unset;
+  line-height: 1.3;
+  margin: 0;
 }
 
-.set-header-card input:focus {
-  box-shadow: none;
-  border-bottom: 2px solid var(--primary);
+.set-header-label {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  margin: 0;
+  text-transform: uppercase;
 }
 
-.set-header-card textarea {
-  border: none;
-  background: transparent;
-  padding: 8px 0;
-  border-bottom: 2px solid transparent;
-  border-radius: 0;
-}
-
-.set-header-card textarea:focus {
-  box-shadow: none;
-  border-bottom: 2px solid var(--primary);
-  background: transparent;
+.set-header-description {
+  color: var(--muted);
+  line-height: 1.5;
+  margin: 0;
 }
 
 .question-block {

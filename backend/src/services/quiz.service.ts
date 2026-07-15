@@ -1,5 +1,6 @@
 import { Prisma, QuizAttemptStatus, QuizSetStatus } from '@prisma/client';
 import { prisma } from '../server';
+import { AppError } from '../utils/appError';
 
 const activeWhere = { archivedAt: null };
 
@@ -49,7 +50,7 @@ export const getPublicSetsByTopic = async (topicId: string, userId: string) => {
     orderBy: [{ order: 'asc' }, { createdAt: 'desc' }],
     include: {
       questions: { where: activeWhere, select: { id: true } },
-      attempts: { where: { userId }, select: { id: true, status: true, score: true, maxScore: true, timeTaken: true, submittedAt: true } }
+       attempts: { where: { userId }, select: { id: true, status: true, score: true, maxScore: true, timeTaken: true, startedAt: true, submittedAt: true } }
     }
   });
 
@@ -70,7 +71,7 @@ export const getPublicSet = async (setId: string, userId: string) => {
         orderBy: { order: 'asc' },
         select: publicQuestionSelect
       },
-      attempts: { where: { userId }, select: { id: true, status: true, score: true, maxScore: true, timeTaken: true, submittedAt: true } }
+       attempts: { where: { userId }, select: { id: true, status: true, score: true, maxScore: true, timeTaken: true, startedAt: true, submittedAt: true } }
     }
   });
 
@@ -154,7 +155,9 @@ export const submitAttempt = async (
     };
   });
 
-  const status: QuizAttemptStatus = input.expired ? 'EXPIRED' : 'SUBMITTED';
+  const elapsedSeconds = Math.max(0, Math.floor((Date.now() - attempt.startedAt.getTime()) / 1000));
+  const timeTaken = Math.min(elapsedSeconds, attempt.quizSet.timeLimit);
+  const status: QuizAttemptStatus = input.expired || elapsedSeconds >= attempt.quizSet.timeLimit ? 'EXPIRED' : 'SUBMITTED';
 
   return prisma.$transaction(async tx => {
     await tx.quizAttemptAnswer.deleteMany({ where: { attemptId } });
@@ -164,7 +167,7 @@ export const submitAttempt = async (
       data: {
         score,
         maxScore,
-        timeTaken: Math.max(0, input.timeTaken),
+          timeTaken,
         status,
         submittedAt: new Date()
       },
@@ -210,16 +213,50 @@ export const getAdminTopics = async () => {
   });
 };
 
-export const createTopic = async (data: { title: string; slug?: string; description?: string; order?: number; isActive?: boolean }) => {
-  return prisma.quizTopic.create({
-    data: {
-      title: data.title,
-      slug: data.slug || slugify(data.title),
-      description: data.description,
-      order: data.order || 0,
-      isActive: data.isActive ?? true
-    }
+export const getArchivedAdminTopics = async () => {
+  return prisma.quizTopic.findMany({
+    where: { archivedAt: { not: null } },
+    orderBy: { archivedAt: 'desc' },
+    include: { _count: { select: { sets: true } } }
   });
+};
+
+export const createTopic = async (data: { title: string; slug?: string; description?: string; order?: number; isActive?: boolean }) => {
+  const slug = data.slug || slugify(data.title);
+  if (!slug) {
+    throw new AppError('INVALID_TOPIC_SLUG', 'Tên chủ đề phải chứa ít nhất một ký tự chữ hoặc số.', 400);
+  }
+
+  const existingTopic = await prisma.quizTopic.findUnique({
+    where: { slug },
+    select: { archivedAt: true }
+  });
+
+  if (existingTopic) {
+    const message = existingTopic.archivedAt
+      ? 'Chủ đề này đã tồn tại trong danh sách lưu trữ. Vui lòng xóa vĩnh viễn hoặc dùng tên khác.'
+      : 'Chủ đề với tên hoặc slug này đã tồn tại.';
+    throw new AppError('QUIZ_TOPIC_SLUG_EXISTS', message, 409);
+  }
+
+  try {
+    return await prisma.quizTopic.create({
+      data: {
+        title: data.title,
+        slug,
+        description: data.description,
+        order: data.order || 0,
+        isActive: data.isActive ?? true
+      }
+    });
+  } catch (error) {
+    // The pre-check gives a helpful message, while this also covers two
+    // concurrent create requests that choose the same slug.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      throw new AppError('QUIZ_TOPIC_SLUG_EXISTS', 'Chủ đề với tên hoặc slug này đã tồn tại.', 409);
+    }
+    throw error;
+  }
 };
 
 export const updateTopic = async (id: string, data: { title?: string; slug?: string; description?: string | null; order?: number; isActive?: boolean }) => {
@@ -228,6 +265,29 @@ export const updateTopic = async (id: string, data: { title?: string; slug?: str
 
 export const archiveTopic = async (id: string) => {
   return prisma.quizTopic.update({ where: { id }, data: { archivedAt: new Date(), isActive: false } });
+};
+
+export const permanentlyDeleteArchivedTopic = async (id: string) => {
+  return prisma.$transaction(async (tx) => {
+    const topic = await tx.quizTopic.findUnique({
+      where: { id },
+      select: { archivedAt: true }
+    });
+
+    if (!topic) throw new AppError('NOT_FOUND', 'Không tìm thấy chủ đề.', 404);
+    if (!topic.archivedAt) {
+      throw new AppError('TOPIC_NOT_ARCHIVED', 'Chỉ có thể xóa vĩnh viễn chủ đề đã lưu trữ.', 400);
+    }
+
+    const topicSetFilter = { quizSet: { topicId: id } };
+    await tx.quizAttemptAnswer.deleteMany({ where: { attempt: topicSetFilter } });
+    await tx.quizOption.deleteMany({ where: { question: topicSetFilter } });
+    await tx.quizQuestion.deleteMany({ where: topicSetFilter });
+    await tx.quizAttempt.deleteMany({ where: topicSetFilter });
+    await tx.quizSet.deleteMany({ where: { topicId: id } });
+
+    return tx.quizTopic.delete({ where: { id } });
+  });
 };
 
 export const getAdminSets = async (topicId?: string) => {

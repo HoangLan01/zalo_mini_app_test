@@ -8,6 +8,7 @@
     "dev": "vite",
     "build": "vite build",
     "typecheck": "tsc --noEmit",
+    "check:env-examples": "node scripts/check-env-examples.mjs",
     "check:vi-encoding": "node scripts/check-vietnamese-encoding.mjs",
     "format": "prettier --write \"src/**/*.{ts,tsx}\"",
     "test": "vitest run",
@@ -19,12 +20,12 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
-    "dompurify": "^3.4.5",
+    "dompurify": "^3.4.12",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-transition-group": "^4.4.5",
     "sass": "^1.99.0",
-    "zmp-sdk": "^2.51.1",
+    "zmp-sdk": "^2.51.6",
     "zmp-ui": "^1.11.14",
     "zustand": "^5.0.12"
   },

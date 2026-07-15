@@ -93,6 +93,15 @@ export const getAdminTopics = async (req: Request, res: Response, next: NextFunc
   }
 };
 
+export const getArchivedAdminTopics = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const data = await quizService.getArchivedAdminTopics();
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const createTopic = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const data = await quizService.createTopic(req.body);
@@ -114,6 +123,15 @@ export const updateTopic = async (req: Request, res: Response, next: NextFunctio
 export const archiveTopic = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const data = await quizService.archiveTopic(req.params.id);
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const permanentlyDeleteArchivedTopic = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const data = await quizService.permanentlyDeleteArchivedTopic(req.params.id);
     res.status(200).json({ success: true, data });
   } catch (error) {
     next(error);

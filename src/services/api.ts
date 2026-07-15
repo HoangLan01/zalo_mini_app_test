@@ -1,8 +1,15 @@
 import { getZaloAccessToken } from '../utils/zaloHelper';
 
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const resolveBaseUrl = () => {
+  const configured = import.meta.env.VITE_API_URL?.trim();
+  if (configured) return configured.replace(/\/+$/, '');
+  if (import.meta.env.DEV) return 'http://localhost:3001';
+  throw new Error('VITE_API_URL is required for non-development builds.');
+};
+
+const BASE_URL = resolveBaseUrl();
 const JWT_KEY = 'mini_app_jwt';
-const ENABLE_DEV_AUTH = import.meta.env.VITE_ENABLE_DEV_AUTH === 'true' || import.meta.env.DEV;
+const ENABLE_DEV_AUTH = import.meta.env.DEV && import.meta.env.VITE_ENABLE_DEV_AUTH === 'true';
 
 type ApiEnvelope<T> = { success: true; data: T } | { success: false; error: { code: string; message: string } };
 

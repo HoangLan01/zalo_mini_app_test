@@ -160,6 +160,7 @@ describe('publishSet', () => {
 
 describe('createTopic', () => {
   it('should create topic with auto-generated slug', async () => {
+    prismaMock.quizTopic.findUnique.mockResolvedValue(null);
     prismaMock.quizTopic.create.mockResolvedValue({
       id: 'topic-1',
       slug: 'lich-su-viet-nam',
@@ -183,6 +184,7 @@ describe('createTopic', () => {
   });
 
   it('should use provided slug when given', async () => {
+    prismaMock.quizTopic.findUnique.mockResolvedValue(null);
     prismaMock.quizTopic.create.mockResolvedValue({} as any);
 
     await quizService.createTopic({ title: 'Test', slug: 'custom-slug' });
@@ -190,6 +192,63 @@ describe('createTopic', () => {
     expect(prismaMock.quizTopic.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ slug: 'custom-slug' }),
     });
+  });
+
+  it('should reject an existing active topic slug before creating', async () => {
+    prismaMock.quizTopic.findUnique.mockResolvedValue({ archivedAt: null } as any);
+
+    await expect(quizService.createTopic({ title: 'Lịch sử Việt Nam' }))
+      .rejects.toMatchObject({
+        code: 'QUIZ_TOPIC_SLUG_EXISTS',
+        statusCode: 409,
+        message: 'Chủ đề với tên hoặc slug này đã tồn tại.'
+      });
+
+    expect(prismaMock.quizTopic.create).not.toHaveBeenCalled();
+  });
+
+  it('should identify a matching slug in the archive', async () => {
+    prismaMock.quizTopic.findUnique.mockResolvedValue({ archivedAt: new Date() } as any);
+
+    await expect(quizService.createTopic({ title: 'Lịch sử Việt Nam' }))
+      .rejects.toMatchObject({
+        code: 'QUIZ_TOPIC_SLUG_EXISTS',
+        statusCode: 409,
+        message: 'Chủ đề này đã tồn tại trong danh sách lưu trữ. Vui lòng xóa vĩnh viễn hoặc dùng tên khác.'
+      });
+
+    expect(prismaMock.quizTopic.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('permanentlyDeleteArchivedTopic', () => {
+  it('should delete all quiz data for an archived topic in a transaction', async () => {
+    prismaMock.$transaction.mockImplementation(async (callback: any) => callback(prismaMock));
+    prismaMock.quizTopic.findUnique.mockResolvedValue({ archivedAt: new Date() } as any);
+    prismaMock.quizTopic.delete.mockResolvedValue({ id: 'topic-1' } as any);
+
+    await quizService.permanentlyDeleteArchivedTopic('topic-1');
+
+    expect(prismaMock.quizAttemptAnswer.deleteMany).toHaveBeenCalledWith({
+      where: { attempt: { quizSet: { topicId: 'topic-1' } } }
+    });
+    expect(prismaMock.quizOption.deleteMany).toHaveBeenCalledWith({
+      where: { question: { quizSet: { topicId: 'topic-1' } } }
+    });
+    expect(prismaMock.quizQuestion.deleteMany).toHaveBeenCalledWith({ where: { quizSet: { topicId: 'topic-1' } } });
+    expect(prismaMock.quizAttempt.deleteMany).toHaveBeenCalledWith({ where: { quizSet: { topicId: 'topic-1' } } });
+    expect(prismaMock.quizSet.deleteMany).toHaveBeenCalledWith({ where: { topicId: 'topic-1' } });
+    expect(prismaMock.quizTopic.delete).toHaveBeenCalledWith({ where: { id: 'topic-1' } });
+  });
+
+  it('should reject a topic that has not been archived', async () => {
+    prismaMock.$transaction.mockImplementation(async (callback: any) => callback(prismaMock));
+    prismaMock.quizTopic.findUnique.mockResolvedValue({ archivedAt: null } as any);
+
+    await expect(quizService.permanentlyDeleteArchivedTopic('topic-1'))
+      .rejects.toMatchObject({ code: 'TOPIC_NOT_ARCHIVED', statusCode: 400 });
+
+    expect(prismaMock.quizTopic.delete).not.toHaveBeenCalled();
   });
 });
 

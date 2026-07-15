@@ -6,7 +6,7 @@ import logger from '../utils/logger';
 
 export const startReminderJob = () => {
   // Chạy mỗi 30 phút
-  cron.schedule('*/30 * * * *', async () => {
+  const task = cron.schedule('*/30 * * * *', async () => {
     logger.info('Running cron job: reminderJob');
     try {
       const now = new Date();
@@ -69,4 +69,6 @@ export const startReminderJob = () => {
       logger.error('Error in reminderJob:', error);
     }
   });
+
+  return task;
 };

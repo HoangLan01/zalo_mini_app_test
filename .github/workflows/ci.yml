@@ -33,7 +33,13 @@ jobs:
           cache-dependency-path: package-lock.json
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
+
+      - name: Validate env examples
+        run: npm run check:env-examples
+
+      - name: Audit frontend production dependencies
+        run: npm audit --omit=dev --audit-level=high
 
       - name: Check Vietnamese encoding
         run: npm run check:vi-encoding
@@ -46,6 +52,9 @@ jobs:
 
       - name: Build frontend
         run: npm run build
+        env:
+          VITE_API_URL: https://api.phuongtungthien.com
+          VITE_ZALO_OA_ID: example_oa_id
 
   admin:
     name: Admin
@@ -63,10 +72,16 @@ jobs:
           cache-dependency-path: admin/package-lock.json
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
+
+      - name: Validate env examples
+        run: npm run check:env-examples
+        working-directory: ..
 
       - name: Build admin
         run: npm run build
+        env:
+          VITE_API_URL: https://api.phuongtungthien.com
 
   backend:
     name: Backend
@@ -86,7 +101,10 @@ jobs:
           cache-dependency-path: backend/package-lock.json
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
+
+      - name: Audit backend production dependencies
+        run: npm audit --omit=dev --audit-level=high
 
       - name: Validate Prisma schema
         run: npx prisma validate

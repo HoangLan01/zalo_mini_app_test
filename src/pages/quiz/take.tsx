@@ -16,9 +16,18 @@ const QuizTakePage: React.FC = () => {
   const [timeLeft, setTimeLeft] = useState(0);
   const [showSubmitModal, setShowSubmitModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [attemptId, setAttemptId] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval>>();
   const timeLeftRef = useRef(0);
-  const attemptIdRef = useRef<string | null>(null);
+  const deadlineRef = useRef(0);
+  const isAutoSubmittingRef = useRef(false);
+  const openSnackbarRef = useRef(openSnackbar);
+
+  // zmp-ui returns a new snackbar callback on every render. Keep its latest
+  // value in a ref so it does not retrigger the quiz-initialization effect.
+  useEffect(() => {
+    openSnackbarRef.current = openSnackbar;
+  }, [openSnackbar]);
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -28,33 +37,34 @@ const QuizTakePage: React.FC = () => {
 
   const handleSubmit = useCallback(
     async (autoSubmit = false) => {
-      if (!currentSet || !attemptIdRef.current || isSubmitting) return;
+      if (!currentSet || !attemptId || isSubmitting) return;
       setIsSubmitting(true);
       clearInterval(timerRef.current);
 
       try {
-        const timeTaken = currentSet.timeLimit - timeLeftRef.current;
-        await submitAttempt(attemptIdRef.current, {
+        const timeTaken = Math.max(0, currentSet.timeLimit - timeLeftRef.current);
+        await submitAttempt(attemptId, {
           timeTaken,
           expired: autoSubmit,
           answers: Object.entries(answers).map(([questionId, selectedOptionId]) => ({ questionId, selectedOptionId })),
         });
 
         if (autoSubmit) {
-          openSnackbar({ text: 'Đã hết thời gian làm bài!', type: 'warning' });
+          openSnackbarRef.current({ text: 'Đã hết thời gian làm bài!', type: 'warning' });
         }
 
         navigate('/quiz-result', { state: { setId: currentSet.id }, replace: true });
       } catch (error: any) {
-        openSnackbar({ text: error.message, type: 'error' });
+        openSnackbarRef.current({ text: error.message, type: 'error' });
         setIsSubmitting(false);
       }
     },
-    [answers, currentSet, isSubmitting, navigate, openSnackbar, submitAttempt]
+    [answers, currentSet, isSubmitting, navigate, submitAttempt]
   );
 
   useEffect(() => {
     let mounted = true;
+    setAttemptId(null);
 
     const init = async () => {
       try {
@@ -67,11 +77,13 @@ const QuizTakePage: React.FC = () => {
         }
 
         const attempt = set.attempt || (await startAttempt(set.id));
-        attemptIdRef.current = attempt.id;
-        timeLeftRef.current = set.timeLimit;
-        setTimeLeft(set.timeLimit);
+        setAttemptId(attempt.id);
+        deadlineRef.current = new Date(attempt.startedAt).getTime() + set.timeLimit * 1000;
+        const remainingSeconds = Math.max(0, Math.ceil((deadlineRef.current - Date.now()) / 1000));
+        timeLeftRef.current = remainingSeconds;
+        setTimeLeft(remainingSeconds);
       } catch (error: any) {
-        openSnackbar({ text: error.message || 'Không tìm thấy bộ câu hỏi', type: 'error' });
+        openSnackbarRef.current({ text: error.message || 'Không tìm thấy bộ câu hỏi', type: 'error' });
         navigate('/quiz');
       }
     };
@@ -81,26 +93,30 @@ const QuizTakePage: React.FC = () => {
       mounted = false;
       clearInterval(timerRef.current);
     };
-  }, [fetchSet, navigate, openSnackbar, setId, startAttempt]);
+  }, [fetchSet, navigate, setId, startAttempt]);
 
   useEffect(() => {
-    if (!currentSet || !attemptIdRef.current) return;
+    if (!currentSet || !attemptId) return;
 
-    timerRef.current = setInterval(() => {
-      setTimeLeft((prev) => {
-        const next = prev - 1;
-        timeLeftRef.current = Math.max(0, next);
-        if (next <= 0) {
-          clearInterval(timerRef.current);
-          handleSubmit(true);
-          return 0;
+    const updateTimer = () => {
+      const next = Math.max(0, Math.ceil((deadlineRef.current - Date.now()) / 1000));
+      timeLeftRef.current = next;
+      setTimeLeft(next);
+
+      if (next <= 0) {
+        clearInterval(timerRef.current);
+        if (!isAutoSubmittingRef.current) {
+          isAutoSubmittingRef.current = true;
+          void handleSubmit(true);
         }
-        return next;
-      });
-    }, 1000);
+      }
+    };
+
+    updateTimer();
+    timerRef.current = setInterval(updateTimer, 1000);
 
     return () => clearInterval(timerRef.current);
-  }, [currentSet, handleSubmit]);
+  }, [attemptId, currentSet, handleSubmit]);
 
   if (!currentSet || !currentSet.questions?.length || !currentAttempt) {
     return (

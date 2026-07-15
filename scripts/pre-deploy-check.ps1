@@ -5,6 +5,8 @@ $ErrorActionPreference = "Continue"
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $root = Split-Path -Parent $scriptDir
+$backendDir = Join-Path $root "backend"
+$adminDir = Join-Path $root "admin"
 
 Write-Host ""
 Write-Host "==========================================" -ForegroundColor Magenta
@@ -15,94 +17,177 @@ Write-Host ""
 $checks = [ordered]@{}
 $startTime = Get-Date
 
-# -- 1. Backend Tests --
-Write-Host "[1/7] Running backend tests with coverage..." -ForegroundColor Yellow
-Push-Location (Join-Path $root "backend")
-npm run test:ci 2>&1 | Out-Null
-if ($LASTEXITCODE -eq 0) {
-    $checks["Backend Tests"] = "[PASS] PASS"
-} else {
-    $checks["Backend Tests"] = "[FAIL] FAIL"
-}
-Pop-Location
+function Invoke-Check {
+    param(
+        [string]$Name,
+        [string]$StepLabel,
+        [scriptblock]$Action,
+        [string]$SuccessStatus = "[PASS] PASS",
+        [string]$FailureStatus = "[FAIL] FAIL"
+    )
 
-# -- 2. Backend Typecheck --
-Write-Host "[2/7] Backend type check..." -ForegroundColor Yellow
-Push-Location (Join-Path $root "backend")
-npx tsc --noEmit 2>&1 | Out-Null
-if ($LASTEXITCODE -eq 0) {
-    $checks["Backend Typecheck"] = "[PASS] PASS"
-} else {
-    $checks["Backend Typecheck"] = "[FAIL] FAIL"
-}
-Pop-Location
-
-# -- 3. Backend Build --
-Write-Host "[3/7] Building backend..." -ForegroundColor Yellow
-Push-Location (Join-Path $root "backend")
-npm run build 2>&1 | Out-Null
-if ($LASTEXITCODE -eq 0) {
-    $checks["Backend Build"] = "[PASS] PASS"
-} else {
-    $checks["Backend Build"] = "[FAIL] FAIL"
-}
-Pop-Location
-
-# -- 4. Frontend Typecheck --
-Write-Host "[4/7] Frontend type check..." -ForegroundColor Yellow
-Push-Location $root
-npx tsc --noEmit 2>&1 | Out-Null
-if ($LASTEXITCODE -eq 0) {
-    $checks["Frontend Typecheck"] = "[PASS] PASS"
-} else {
-    $checks["Frontend Typecheck"] = "[FAIL] FAIL"
-}
-Pop-Location
-
-# -- 5. Frontend Build --
-Write-Host "[5/7] Building frontend..." -ForegroundColor Yellow
-Push-Location $root
-npm run build 2>&1 | Out-Null
-if ($LASTEXITCODE -eq 0) {
-    $checks["Frontend Build"] = "[PASS] PASS"
-} else {
-    $checks["Frontend Build"] = "[FAIL] FAIL"
-}
-Pop-Location
-
-# -- 6. Admin Build --
-Write-Host "[6/7] Building admin panel..." -ForegroundColor Yellow
-$adminDir = Join-Path $root "admin"
-if (Test-Path $adminDir) {
-    Push-Location $adminDir
-    npm run build 2>&1 | Out-Null
+    Write-Host $StepLabel -ForegroundColor Yellow
+    & $Action
     if ($LASTEXITCODE -eq 0) {
-        $checks["Admin Build"] = "[PASS] PASS"
+        $checks[$Name] = $SuccessStatus
     } else {
-        $checks["Admin Build"] = "[FAIL] FAIL"
+        $checks[$Name] = $FailureStatus
+    }
+}
+
+function Test-ExpectedFailure {
+    param(
+        [string]$Name,
+        [string]$StepLabel,
+        [scriptblock]$Action
+    )
+
+    Write-Host $StepLabel -ForegroundColor Yellow
+    & $Action
+    if ($LASTEXITCODE -ne 0) {
+        $checks[$Name] = "[PASS] PASS"
+    } else {
+        $checks[$Name] = "[FAIL] FAIL"
+    }
+}
+
+function Move-EnvFilesOutOfTheWay {
+    param([string]$TargetDir)
+
+    $movedFiles = @()
+    foreach ($name in @(".env", ".env.local", ".env.production", ".env.production.local")) {
+        $original = Join-Path $TargetDir $name
+        if (Test-Path $original) {
+            $backup = "$original.predeploy.bak"
+            Move-Item -LiteralPath $original -Destination $backup -Force
+            $movedFiles += [pscustomobject]@{
+                Original = $original
+                Backup = $backup
+            }
+        }
+    }
+
+    return $movedFiles
+}
+
+function Restore-EnvFiles {
+    param([object[]]$MovedFiles)
+
+    foreach ($file in $MovedFiles) {
+        if (Test-Path $file.Backup) {
+            Move-Item -LiteralPath $file.Backup -Destination $file.Original -Force
+        }
+    }
+}
+
+Invoke-Check "Env Examples" "[1/12] Validating environment example files..." {
+    Push-Location $root
+    npm run check:env-examples 2>&1 | Out-Null
+    Pop-Location
+}
+
+Invoke-Check "Secret Scan" "[2/12] Running basic tracked secret scan..." {
+    Push-Location $root
+    git grep -n -I -E "BEGIN (RSA|EC|OPENSSH|DSA) PRIVATE KEY|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z\\-_]{35}|sk_live_[0-9A-Za-z]+|xox[baprs]-[0-9A-Za-z-]+" -- . 2>&1 | Out-Null
+    if ($LASTEXITCODE -eq 0) {
+        $global:LASTEXITCODE = 1
+    } else {
+        $global:LASTEXITCODE = 0
     }
     Pop-Location
-} else {
-    $checks["Admin Build"] = "[SKIP] SKIP"
 }
 
-# -- 7. Vietnamese Encoding --
-Write-Host "[7/7] Checking Vietnamese encoding..." -ForegroundColor Yellow
+Invoke-Check "Backend Audit" "[3/12] Auditing backend production dependencies..." {
+    Push-Location $backendDir
+    npm audit --omit=dev --audit-level=high 2>&1 | Out-Null
+    Pop-Location
+}
+
+Invoke-Check "Frontend Audit" "[4/12] Auditing frontend production dependencies..." {
+    Push-Location $root
+    npm audit --omit=dev --audit-level=high 2>&1 | Out-Null
+    Pop-Location
+}
+
+Invoke-Check "Backend Tests" "[5/12] Running backend tests with coverage..." {
+    Push-Location $backendDir
+    npm run test:ci 2>&1 | Out-Null
+    Pop-Location
+}
+
+Invoke-Check "Backend Typecheck" "[6/12] Backend type check..." {
+    Push-Location $backendDir
+    npx tsc --noEmit 2>&1 | Out-Null
+    Pop-Location
+}
+
+Invoke-Check "Backend Build" "[7/12] Building backend..." {
+    Push-Location $backendDir
+    npm run build 2>&1 | Out-Null
+    Pop-Location
+}
+
+Invoke-Check "Frontend Typecheck" "[8/12] Frontend type check..." {
+    Push-Location $root
+    npx tsc --noEmit 2>&1 | Out-Null
+    Pop-Location
+}
+
+Invoke-Check "Frontend Build" "[9/12] Building frontend with explicit production env..." {
+    Push-Location $root
+    $oldApiUrl = $env:VITE_API_URL
+    $oldOaId = $env:VITE_ZALO_OA_ID
+    $env:VITE_API_URL = "https://api.phuongtungthien.com"
+    $env:VITE_ZALO_OA_ID = "example_oa_id"
+    npm run build 2>&1 | Out-Null
+    $env:VITE_API_URL = $oldApiUrl
+    $env:VITE_ZALO_OA_ID = $oldOaId
+    Pop-Location
+}
+
+Test-ExpectedFailure "Frontend Missing API Guard" "[10/12] Verifying frontend production build fails without explicit API env..." {
+    Push-Location $root
+    $oldApiUrl = $env:VITE_API_URL
+    $oldOaId = $env:VITE_ZALO_OA_ID
+    $movedFiles = Move-EnvFilesOutOfTheWay -TargetDir $root
+    $env:VITE_API_URL = ""
+    $env:VITE_ZALO_OA_ID = ""
+    npx vite build --mode production 2>&1 | Out-Null
+    Restore-EnvFiles -MovedFiles $movedFiles
+    $env:VITE_API_URL = $oldApiUrl
+    $env:VITE_ZALO_OA_ID = $oldOaId
+    Pop-Location
+}
+
+Invoke-Check "Admin Build" "[11/12] Building admin with explicit production env..." {
+    Push-Location $adminDir
+    $oldApiUrl = $env:VITE_API_URL
+    $env:VITE_API_URL = "https://api.phuongtungthien.com"
+    npm run build 2>&1 | Out-Null
+    $env:VITE_API_URL = $oldApiUrl
+    Pop-Location
+}
+
+Test-ExpectedFailure "Admin Missing API Guard" "[12/12] Verifying admin production build fails without explicit API env..." {
+    Push-Location $adminDir
+    $oldApiUrl = $env:VITE_API_URL
+    $movedFiles = Move-EnvFilesOutOfTheWay -TargetDir $adminDir
+    $env:VITE_API_URL = ""
+    npx vite build --mode production 2>&1 | Out-Null
+    Restore-EnvFiles -MovedFiles $movedFiles
+    $env:VITE_API_URL = $oldApiUrl
+    Pop-Location
+}
+
 Push-Location $root
 $encScript = (Get-Content (Join-Path $root "package.json") | ConvertFrom-Json).scripts."check:vi-encoding"
 if ($encScript) {
-    npm run "check:vi-encoding" 2>&1 | Out-Null
-    if ($LASTEXITCODE -eq 0) {
-        $checks["Vietnamese Encoding"] = "[PASS] PASS"
-    } else {
-        $checks["Vietnamese Encoding"] = "[WARN] WARN"
-    }
-} else {
-    $checks["Vietnamese Encoding"] = "[SKIP] SKIP"
+    Invoke-Check "Vietnamese Encoding" "[Info] Checking Vietnamese encoding..." {
+        npm run "check:vi-encoding" 2>&1 | Out-Null
+    } "[PASS] PASS" "[WARN] WARN"
 }
 Pop-Location
 
-# -- Summary --
 $endTime = Get-Date
 $duration = ($endTime - $startTime).TotalSeconds
 
