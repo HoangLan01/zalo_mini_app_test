@@ -60,6 +60,8 @@
 
   /* ZMP override */
   --zaui-light-bottom-navigation-divider-color: transparent;
+  --zaui-light-bottom-navigation-color: #62666a;
+  --zaui-light-bottom-navigation-active-color: var(--primary);
 }
 
 /* ==================== Base Typography ==================== */
@@ -498,10 +500,10 @@ body, * {
 }
 
 /* Active bottom nav item */
-.zaui-bottom-navigation .zaui-bottom-navigation-item-active .zaui-bottom-navigation-icon {
+.zaui-bottom-navigation .zaui-bottom-navigation-item-active .zaui-bottom-navigation-item-icon {
   color: var(--primary) !important;
 }
-.zaui-bottom-navigation .zaui-bottom-navigation-item-active .zaui-bottom-navigation-label {
+.zaui-bottom-navigation .zaui-bottom-navigation-item-active .zaui-bottom-navigation-item-label {
   color: var(--primary) !important;
   font-weight: 600 !important;
 }
@@ -939,6 +941,14 @@ body, * {
   object-fit: cover;
   border: 3px solid #d8f5ff;
   box-shadow: 0 8px 18px rgba(0, 82, 204, 0.14);
+}
+
+.citizen-avatar-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--primary-light);
+  color: var(--primary);
 }
 
 .citizen-copy {

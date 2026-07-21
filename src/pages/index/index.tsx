@@ -299,11 +299,13 @@ const IndexPage: React.FC = () => {
         <section className="citizen-card" aria-label="Định danh công dân">
           <div className="citizen-profile">
             <div className="citizen-identity">
-              <img
-                className="citizen-avatar"
-                src={userInfo?.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&h=120&fit=crop'}
-                alt="Ảnh đại diện"
-              />
+              {userInfo?.avatar ? (
+                <img className="citizen-avatar" src={userInfo.avatar} alt="Ảnh đại diện" />
+              ) : (
+                <div className="citizen-avatar citizen-avatar-fallback" aria-label="Ảnh đại diện mặc định">
+                  <Icon name="badge" size={24} />
+                </div>
+              )}
               <div className="citizen-badge">
                 <Icon name="badge" size={14} />
                 <span>Công dân số</span>
