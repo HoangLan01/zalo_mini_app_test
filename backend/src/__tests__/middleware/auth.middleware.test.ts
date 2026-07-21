@@ -24,6 +24,25 @@ function createMockReqResNext(overrides: Partial<Request> = {}) {
   return { req, res, next };
 }
 
+function runAuthenticateToken(req: Request, res: Response, next: NextFunction) {
+  return new Promise<void>((resolve) => {
+    const mockedNext = next as jest.MockedFunction<NextFunction>;
+    const mockedJson = res.json as jest.MockedFunction<Response['json']>;
+
+    mockedNext.mockImplementation((...args: Parameters<NextFunction>) => {
+      resolve();
+      return undefined as ReturnType<NextFunction>;
+    });
+
+    mockedJson.mockImplementation((body?: any) => {
+      resolve();
+      return res;
+    });
+
+    authenticateToken(req, res, next);
+  });
+}
+
 describe('authenticateToken', () => {
   it('should set req.user for valid Bearer token', async () => {
     const token = generateTestToken({ userId: 'user-1', role: 'USER', sessionVersion: 0 });
@@ -34,10 +53,7 @@ describe('authenticateToken', () => {
       headers: { authorization: `Bearer ${token}` } as any,
     });
 
-    authenticateToken(req, res, next);
-
-    // Wait for async processing
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await runAuthenticateToken(req, res, next);
 
     expect(next).toHaveBeenCalled();
     expect(req.user).toBeDefined();
@@ -75,9 +91,7 @@ describe('authenticateToken', () => {
       headers: { authorization: `Bearer ${expiredToken}` } as any,
     });
 
-    authenticateToken(req, res, next);
-
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await runAuthenticateToken(req, res, next);
 
     expect(res.status).toHaveBeenCalledWith(401);
   });
@@ -89,9 +103,7 @@ describe('authenticateToken', () => {
       headers: { authorization: `Bearer ${token}` } as any,
     });
 
-    authenticateToken(req, res, next);
-
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await runAuthenticateToken(req, res, next);
 
     expect(res.status).toHaveBeenCalledWith(401);
   });
@@ -105,9 +117,7 @@ describe('authenticateToken', () => {
       headers: { authorization: `Bearer ${token}` } as any,
     });
 
-    authenticateToken(req, res, next);
-
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await runAuthenticateToken(req, res, next);
 
     expect(res.status).toHaveBeenCalledWith(401);
   });
@@ -121,9 +131,7 @@ describe('authenticateToken', () => {
       headers: { authorization: `Bearer ${token}` } as any,
     });
 
-    authenticateToken(req, res, next);
-
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await runAuthenticateToken(req, res, next);
 
     expect(res.status).toHaveBeenCalledWith(401);
   });

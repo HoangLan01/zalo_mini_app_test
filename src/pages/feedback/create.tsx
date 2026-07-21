@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { Page, Box, Text, Input, Select, useLocation, useNavigate, useSnackbar } from 'zmp-ui';
-import { getLocation, chooseImage, authorize } from 'zmp-sdk/apis';
+import { getLocation, openMediaPicker, authorize } from 'zmp-sdk/apis';
 import PageHeader from '@/components/PageHeader';
-import { apiCall, uploadFeedbackImages } from '@/services/api';
+import { apiCall, getFeedbackMediaUploadUrl, uploadFeedbackImageFiles } from '@/services/api';
 
 type FeedbackType = 'FIELD' | 'SERVICE_ATTITUDE';
 type FeedbackCategory = 'HA_TANG' | 'VE_SINH' | 'TRAT_TU' | 'AN_NINH' | 'KHAC';
@@ -26,6 +26,42 @@ const serviceUnits = [
   'Công an phường',
   'Quân sự phường'
 ];
+
+const pickImageFilesFromBrowser = (count: number) => new Promise<File[]>((resolve, reject) => {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.multiple = count > 1;
+  input.style.display = 'none';
+
+  input.addEventListener('change', () => {
+    const files = Array.from(input.files || []).slice(0, count);
+    input.remove();
+    resolve(files);
+  });
+
+  input.addEventListener('cancel', () => {
+    input.remove();
+    reject(new Error('cancel'));
+  });
+
+  document.body.appendChild(input);
+  input.click();
+});
+
+const extractUploadedImageUrls = (data: unknown): string[] => {
+  if (!data) return [];
+
+  const payload = typeof data === 'string'
+    ? (data.trim() ? JSON.parse(data) : undefined)
+    : data;
+
+  if (!payload || typeof payload !== 'object') return [];
+
+  const value = payload as { data?: { urls?: unknown }; urls?: unknown };
+  const urls = value.data?.urls || value.urls;
+  return Array.isArray(urls) ? urls.filter((url): url is string => typeof url === 'string' && url.length > 0) : [];
+};
 
 const FeedbackCreatePage: React.FC = () => {
   const navigate = useNavigate();
@@ -62,10 +98,28 @@ const FeedbackCreatePage: React.FC = () => {
 
   const handlePickImages = async () => {
     try {
-      const { filePaths } = await chooseImage({ count: 3 - images.length, sourceType: ['album', 'camera'] });
-      setImages([...images, ...filePaths].slice(0, 3));
-    } catch {
-      // User cancelled the picker.
+      const uploadUrl = await getFeedbackMediaUploadUrl();
+      const { data } = await openMediaPicker({
+        type: 'photo',
+        maxSelectItem: 3 - images.length,
+        compressLevel: 2,
+        serverUploadUrl: uploadUrl
+      });
+      let uploadedUrls = extractUploadedImageUrls(data);
+
+      if (uploadedUrls.length === 0) {
+        const files = await pickImageFilesFromBrowser(3 - images.length);
+        uploadedUrls = await uploadFeedbackImageFiles(files);
+      }
+
+      if (!Array.isArray(uploadedUrls) || uploadedUrls.length === 0) {
+        throw new Error('Không nhận được URL ảnh sau khi tải lên');
+      }
+
+      setImages([...images, ...uploadedUrls].slice(0, 3));
+    } catch (err) {
+      const error = err instanceof Error ? err.message : 'Không thể tải ảnh lên';
+      if (!/cancel/i.test(error)) snackbar.openSnackbar({ type: 'error', text: error });
     }
   };
 
@@ -94,7 +148,7 @@ const FeedbackCreatePage: React.FC = () => {
 
     setSubmitting(true);
     try {
-      const imageUrls = isServiceAttitude ? [] : await uploadFeedbackImages(images);
+      const imageUrls = isServiceAttitude ? [] : images;
       await apiCall('/api/feedbacks', {
         method: 'POST',
         body: JSON.stringify(isServiceAttitude ? {

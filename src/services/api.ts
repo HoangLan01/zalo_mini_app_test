@@ -61,6 +61,38 @@ export function clearApiToken() {
   localStorage.removeItem(JWT_KEY);
 }
 
+export async function getFeedbackMediaUploadUrl(): Promise<string> {
+  const token = await loginWithZalo();
+  return `${BASE_URL}/api/upload?token=${encodeURIComponent(token)}`;
+}
+
+export async function uploadFeedbackImageFiles(files: File[]): Promise<string[]> {
+  if (files.length === 0) return [];
+
+  let token = await loginWithZalo();
+  const formData = new FormData();
+
+  files.forEach((file) => {
+    formData.append('files', file, file.name || 'feedback-image.jpg');
+  });
+
+  const doRequest = () => fetch(`${BASE_URL}/api/upload`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData
+  });
+
+  let res = await doRequest();
+  if (res.status === 401) {
+    clearApiToken();
+    token = await loginWithZalo();
+    res = await doRequest();
+  }
+
+  const data = await readApiResponse<{ urls: string[] }>(res);
+  return data.urls;
+}
+
 export async function apiCall<T>(
   endpoint: string,
   options: RequestInit = {}

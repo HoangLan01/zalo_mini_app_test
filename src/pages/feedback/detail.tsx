@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Page, Box, Text, useLocation, useSnackbar } from 'zmp-ui';
 import PageHeader from '@/components/PageHeader';
 import { apiCall } from '@/services/api';
@@ -64,10 +64,18 @@ const formatDateTime = (value?: string | null) =>
 
 const FeedbackDetailPage: React.FC = () => {
   const { state } = useLocation();
-  const snackbar = useSnackbar();
+  const { openSnackbar } = useSnackbar();
   const feedbackId = (state as { id?: string } | undefined)?.id;
   const [feedback, setFeedback] = useState<FeedbackDetail | null>(null);
   const [loading, setLoading] = useState(false);
+  const openSnackbarRef = useRef(openSnackbar);
+  const snackbar = useRef({
+    openSnackbar: (options: Parameters<typeof openSnackbar>[0]) => openSnackbarRef.current(options),
+  }).current;
+
+  useEffect(() => {
+    openSnackbarRef.current = openSnackbar;
+  }, [openSnackbar]);
 
   useEffect(() => {
     if (!feedbackId) return;

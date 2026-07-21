@@ -12,7 +12,8 @@ const router = Router();
 
 const uploadQuerySchema = z
   .object({
-    purpose: z.enum(['event']).optional()
+    purpose: z.enum(['event']).optional(),
+    token: z.string().optional()
   })
   .strict();
 
@@ -36,7 +37,10 @@ router.post(
   authenticateToken,
   validateQuery(uploadQuerySchema),
   (req, res, next) => (String(req.query.purpose || '') === 'event' ? verifyAdminOrigin(req, res, next) : next()),
-  upload.array('files', 10),
+  upload.fields([
+    { name: 'files', maxCount: 10 },
+    { name: 'file', maxCount: 10 }
+  ]),
   uploadController.upload
 );
 

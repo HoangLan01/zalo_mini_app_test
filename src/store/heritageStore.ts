@@ -43,11 +43,7 @@ const initialHeritages: HeritageItem[] = [
     coverImage: thanhViThumbnail,
     shortDesc: 'Đình Thanh Vị tọa lạc tại tổ dân phố Thanh Vị, thờ phụng Tản Viên Sơn Thánh, được khởi dựng vào năm 1743...',
     description: mockHtmlContent,
-    gallery: [
-      'https://images.unsplash.com/photo-1551041777-ed277b8dd348?w=500',
-      'https://images.unsplash.com/photo-1582200371383-74b0f9dc8e75?w=500',
-      'https://images.unsplash.com/photo-1543304526-72dd3780c74b?w=500'
-    ]
+    gallery: []
   },
   { 
     id: '2', 

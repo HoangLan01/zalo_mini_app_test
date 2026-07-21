@@ -5,7 +5,8 @@ import { AppError } from '../utils/appError';
 
 export const upload = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const files = req.files as Express.Multer.File[];
+    const uploaded = req.files as Express.Multer.File[] | Record<string, Express.Multer.File[]> | undefined;
+    const files = Array.isArray(uploaded) ? uploaded : Object.values(uploaded || {}).flat();
     const purpose = String(req.query.purpose || req.body?.purpose || '');
 
     if (!files || files.length === 0) {
@@ -21,7 +22,12 @@ export const upload = async (req: Request, res: Response, next: NextFunction) =>
       purpose === 'event' ? { folder: 'tung-thien/events', maxFiles: 10 } : { folder: 'tung-thien/feedbacks', maxFiles: 3 }
     );
 
-    return sendSuccess(res, { urls });
+    return res.status(200).json({
+      success: true,
+      error: 0,
+      message: 'Success',
+      data: { urls }
+    });
   } catch (error) {
     next(error);
   }
