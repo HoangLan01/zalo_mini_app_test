@@ -62,7 +62,7 @@ export const authenticateToken = (req: Request, res: Response, next: NextFunctio
   if (getCookieValue(req.headers.cookie, ADMIN_SESSION_COOKIE)) return authenticateAdmin(req, res, next);
 
   const authHeader = req.headers.authorization;
-  const queryToken = typeof req.query.token === 'string' ? req.query.token : undefined;
+  const queryToken = typeof req.query?.token === 'string' ? req.query.token : undefined;
   const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : queryToken;
   if (!token) return unauthorized(res);
 
